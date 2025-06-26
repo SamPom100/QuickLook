@@ -13,7 +13,7 @@ def _parse_table_helper(blob: str) -> str:
     for quarterly_row in quarterly_revenue_rows:
         quarterly_cell = quarterly_row.find_all("td")
         date = quarterly_cell[0].get_text(strip = True)
-        revenue = quarterly_cell[1].get_text(strip = True)
+        revenue = quarterly_cell[1].get_text(strip=True).replace("$", "").replace(",", "")
         data.append({"date": date, "revenue": revenue})
     return data
 

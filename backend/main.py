@@ -1,8 +1,17 @@
 from fastapi import FastAPI
 from datasource import DataSource
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 data_source = DataSource()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # or ["*"] for all origins (not recommended for production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class Server:
     def __init__(self) -> None:

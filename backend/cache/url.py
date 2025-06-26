@@ -31,6 +31,8 @@ class URLCache:
         if output.status_code == 403:
             logger.error("403: Access Denied")
             raise Exception("403: Access Denied")
+        if output.status_code == 429:
+            raise Exception("429: Too Many Requests")
         if output.status_code == 200:
             return output.text
         logger.error("Unknown Exception: %s", output.status_code)
