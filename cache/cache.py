@@ -37,7 +37,7 @@ class _URLCacheDB:
         try:
             self.cursor.execute(query, (url, last_updated, text))
             self.connection.commit()
-            logger.info(f"Added to Cache: {url}")
+            logger.info(f"Cache Miss. Added: {url}")
         except Exception:
             logger.exception(f"Error putting: {url}")
             raise
@@ -47,6 +47,7 @@ class _URLCacheDB:
         try:
             self.cursor.execute(query, (url,))
             result = self.cursor.fetchone()
+            logger.info(f"Cache Hit: {url}")
             return result[0] if result else None
         except Exception:
             logger.exception(f"Error getting: {url}")

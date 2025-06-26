@@ -1,3 +1,7 @@
-from cache import URLCache
+from datasource import DataSource
 
-u = URLCache()
+data_source = DataSource()
+
+aapl_revenue = data_source.get_revenue("AAPL")
+for row in aapl_revenue:
+    print(row)
