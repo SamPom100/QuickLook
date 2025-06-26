@@ -16,3 +16,6 @@ def _parse_table_helper(blob: str) -> str:
         revenue = quarterly_cell[1].get_text(strip = True)
         data.append({"date": date, "revenue": revenue})
     return json.dumps(data, indent = 2)
+
+if __name__ == "__main__":
+    raise RuntimeError("Do not run this directly.")
