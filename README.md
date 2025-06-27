@@ -26,3 +26,9 @@
 - Volatility score
 - Current price
 - maybe 1-6-12-18 month price
+
+- EV/Rev
+- EV/EBITA
+- FCF conversion
+- EBITDAG
+- PEG
