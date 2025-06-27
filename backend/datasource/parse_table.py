@@ -25,11 +25,10 @@ def _parse_pe_helper(blob: str):
     data = []
     for quarterly_row in quarterly_pe_ratio_rows:
         quarterly_cell = quarterly_row.find_all('td')
-        time_parts = quarterly_cell[0].get_text(strip=True).split('-')
+        date = quarterly_cell[0].get_text(strip=True)
         revenue = quarterly_cell[-1].get_text(strip=True)
-        formatted_date = f'{time_parts[1]}-{time_parts[0]}'
         cleaned_revenue = revenue.replace(',', '').replace('$', '').replace('.00', '')
-        data.append({"date": formatted_date, "data": cleaned_revenue})
+        data.append({"date": date, "data": cleaned_revenue})
     return data
 
 if __name__ == "__main__":
