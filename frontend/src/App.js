@@ -11,6 +11,7 @@ const endpoints = [
   { key: "cash-flow", label: "Cash Flow" },
   { key: "eps", label: "EPS" },
   { key: "shares-outstanding", label: "Shares Outstanding" },
+  { key: "pe-ratio", label: "PE Ratio" },
 ];
 
 function App() {

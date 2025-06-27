@@ -1,5 +1,5 @@
 from cache import URLCache
-from .parse_table import _parse_table_helper
+from .parse_table import _parse_table_helper, _parse_pe_helper
 
 class DataSource:
     def __init__(self) -> None:
@@ -59,6 +59,13 @@ class DataSource:
         url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/free-cash-flow'
         blob = self.url_cache.getURL(url)
         parsed_result = _parse_table_helper(blob)
+        return parsed_result
+    
+    def get_pe_ratio(self, ticker: str) -> str:
+        ticker = ticker.upper()
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/pe-ratio'
+        blob = self.url_cache.getURL(url)
+        parsed_result = _parse_pe_helper(blob)
         return parsed_result
     
     def seen_before(self, ticker: str) -> bool:

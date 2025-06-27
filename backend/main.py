@@ -49,6 +49,10 @@ def shares_outstanding(ticker: str):
 def cash_flow(ticker: str):
     return data_source.get_cash_flow(ticker)
 
+@app.get("/pe-ratio/{ticker}")
+def pe_ratio(ticker: str):
+    return data_source.get_pe_ratio(ticker)
+
 @app.get("/seen-before/{ticker}")
 def seen_before(ticker: str):
     return data_source.seen_before(ticker)
