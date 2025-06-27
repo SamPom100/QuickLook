@@ -45,6 +45,10 @@ def eps(ticker: str):
 def shares_outstanding(ticker: str):
     return data_source.get_shares_outstanding(ticker)
 
+@app.get("/cash-flow/{ticker}")
+def cash_flow(ticker: str):
+    return data_source.get_cash_flow(ticker)
+
 @app.get("/seen-before/{ticker}")
 def seen_before(ticker: str):
     return data_source.seen_before(ticker)

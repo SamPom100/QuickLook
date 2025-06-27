@@ -8,6 +8,7 @@ const endpoints = [
   { key: "operating-income", label: "Operating Income" },
   { key: "ebitda", label: "EBITDA" },
   { key: "net-income", label: "Net Income" },
+  { key: "cash-flow", label: "Cash Flow" },
   { key: "eps", label: "EPS" },
   { key: "shares-outstanding", label: "Shares Outstanding" },
 ];

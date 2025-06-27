@@ -54,6 +54,13 @@ class DataSource:
         parsed_result = _parse_table_helper(blob)
         return parsed_result
     
+    def get_cash_flow(self, ticker: str) -> str:
+        ticker = ticker.upper()
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/free-cash-flow'
+        blob = self.url_cache.getURL(url)
+        parsed_result = _parse_table_helper(blob)
+        return parsed_result
+    
     def seen_before(self, ticker: str) -> bool:
         ticker = ticker.upper()
         url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/shares-outstanding'
