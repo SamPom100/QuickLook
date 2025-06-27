@@ -20,9 +20,9 @@
 
 
 ### TODO
-P/E
-Market Cap
-EPS
-Volatility score
-Current price
-maybe 1-6-12-18 month price
+~~- P/E~~
+- Market Cap
+- EPS
+- Volatility score
+- Current price
+- maybe 1-6-12-18 month price
