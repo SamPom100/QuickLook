@@ -1,3 +1,8 @@
 # QuickLook
 
-`uvicorn main:app --reload`
+### How to run
+`sh run.sh`
+
+
+### Photo
+

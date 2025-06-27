@@ -38,5 +38,11 @@ class URLCache:
         logger.error("Unknown Exception: %s", output.status_code)
         raise Exception("Unknown Exception: " + str(output.status_code))
 
+    def seen_before(self, url: str) -> bool:
+        check = self.url_cache_db.get(url)
+        if check is None:
+            return False
+        return True
+
 if __name__ == '__main__':
     raise Exception("Do not run this directly.")

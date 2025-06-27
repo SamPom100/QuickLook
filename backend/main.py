@@ -45,6 +45,10 @@ def eps(ticker: str):
 def shares_outstanding(ticker: str):
     return data_source.get_shares_outstanding(ticker)
 
+@app.get("/seen-before/{ticker}")
+def seen_before(ticker: str):
+    return data_source.seen_before(ticker)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

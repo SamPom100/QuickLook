@@ -48,7 +48,12 @@ class _URLCacheDB:
             self.cursor.execute(query, (url,))
             result = self.cursor.fetchone()
             logger.info(f"Cache Hit: {url}")
-            return result[0] if result else None
+            if result is None:
+                logger.info(f"Cache Miss: {url}")
+                return None
+            else:
+                logger.info(f"Cache Hit: {url}")
+                return result[0]
         except Exception:
             logger.exception(f"Error getting: {url}")
             raise
