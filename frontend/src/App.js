@@ -12,6 +12,11 @@ const endpoints = [
   { key: "eps", label: "EPS" },
   { key: "shares-outstanding", label: "Shares Outstanding" },
   { key: "pe-ratio", label: "PE Ratio" },
+  { key: "ev", label: "Enterprise Value" },
+  { key: "stock-price", label: "Stock Price" },
+  { key: "market-cap", label: "Market Cap" },
+  { key: "cash", label: "Cash" },
+  { key: "debt", label: "Debt" },
 ];
 
 function App() {

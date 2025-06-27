@@ -57,6 +57,26 @@ def pe_ratio(ticker: str):
 def seen_before(ticker: str):
     return data_source.seen_before(ticker)
 
+@app.get("/ev/{ticker}")
+def ev(ticker: str):
+    return data_source.get_ev(ticker)
+
+@app.get("/stock-price/{ticker}")
+def stock_price(ticker: str):
+    return data_source.get_stock_price(ticker)
+
+@app.get("/market-cap/{ticker}")
+def market_cap(ticker: str):
+    return data_source.get_market_cap(ticker)
+
+@app.get("/cash/{ticker}")
+def cash(ticker: str):
+    return data_source.get_cash(ticker)
+
+@app.get("/debt/{ticker}")
+def debt(ticker: str):
+    return data_source.get_debt(ticker)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
