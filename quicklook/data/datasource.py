@@ -27,7 +27,7 @@ class DataSource:
         return url_parsed
     
     def get_ebitda(self, ticker: str) -> str:
-        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/ebitda'
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker.upper()}/apple/ebitda'
         url_result = self._url_cache.get_url(url)
         url_parsed = parse_table_helper(url_result, url)
         return url_parsed
@@ -39,19 +39,19 @@ class DataSource:
         return url_parsed
     
     def get_eps(self, ticker: str) -> str:
-        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/earnings-per-share-eps'
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker.upper()}/apple/earnings-per-share-eps'
         url_result = self._url_cache.get_url(url)
         url_parsed = parse_table_helper(url_result, url)
         return url_parsed
     
     def get_shares_outstanding(self, ticker: str) -> str:
-        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/shares-outstanding'
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker.upper()}/apple/shares-outstanding'
         url_result = self._url_cache.get_url(url)
         url_parsed = parse_table_helper(url_result, url)
         return url_parsed
     
     def get_cash_flow(self, ticker: str) -> str:
-        url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{ticker}/free-cash-flow'
+        url = f'https://www.macrotrends.net/stocks/charts/{ticker.upper()}/apple/free-cash-flow'
         url_result = self._url_cache.get_url(url)
         url_parsed = parse_table_helper(url_result, url)
         return url_parsed
@@ -92,7 +92,7 @@ class DataSource:
         for date, price in hist.items():
             prices.append({'date': date, 'data': round(float(price), 2)})
         return prices
-    
+
     def delete_all(self, ticker: str) -> None:
         all_urls = [
             f"https://www.macrotrends.net/stocks/charts/{ticker.upper()}/apple/revenue",
