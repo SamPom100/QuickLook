@@ -31,5 +31,4 @@ def plot_financial_data(stock_prices=None, stock_name=None, **datasets):
         plt.title(f"{stock_name} Financials and Stock Price")
 
     plt.tight_layout()
-    plt.savefig(f'{stock_name}.png', format='png', dpi=300)
-    plt.show()
+    plt.savefig(f'graph_output/{stock_name}.png', format='png', dpi=300)

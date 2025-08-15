@@ -28,6 +28,4 @@ def parse_table_helper(blob: str, url: str) -> str:
             data.append({"date": date, "data": revenue})
         return data
     except:
-        print("Error parsing table data")
-        # self._url_cache.delete_url(url)
-        return []
+        raise ValueError(f"Failed to parse data from {url}. Please check the URL or the HTML structure.")
