@@ -1,7 +1,7 @@
 from data.datasource import DataSource
 from chart.chart import plot_financial_data
 
-STOCK = 'PLTR'
+STOCK = 'AMZN'
 
 datasource = DataSource()
 
@@ -14,15 +14,15 @@ try:
     dates = [item['date'] for item in revenue]
 
     stock_price_history = datasource.get_stock_price_history(STOCK, dates[-1], dates[0])
-
-    plot_financial_data(
-        Revenue=revenue,
-        Gross_Profit=gross_profit,
-        Operating_Income=operating_income,
-        Net_Income=net_income,
-        stock_prices=stock_price_history,
-        stock_name=STOCK
-    )
 except Exception as e:
-    print(f"An error occurred: {e}")
     datasource.delete_all(STOCK)
+    raise e
+
+plot_financial_data(
+    Revenue=revenue,
+    Gross_Profit=gross_profit,
+    Operating_Income=operating_income,
+    Net_Income=net_income,
+    stock_prices=stock_price_history,
+    stock_name=STOCK
+)
