@@ -9,7 +9,7 @@ logging.basicConfig(
     format='%(levelname)s: %(name)s: %(message)s'
 )
 
-STOCK = 'UNH'  
+STOCK = 'AMZN'  
 
 datasource = DataSource()
 
@@ -21,7 +21,7 @@ try:
 
     dates: list[str] = [item['date'] for item in revenue]
 
-    stock_price_history: list[dict[str, str]] = datasource.get_stock_price_history(STOCK, dates[-1], dates[0])
+    stock_price_history: list[dict[str, str]] = datasource.get_stock_price_history(STOCK, dates[0], dates[-1])
 except Exception as e:
     if "429" in str(e):
         logger.error(f"Rate limit exceeded when fetching data for {STOCK}. Slow down.")

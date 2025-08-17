@@ -28,6 +28,6 @@ def parse_table_helper(blob: str, url: str) -> list[dict[str, str]]:
                 continue
             revenue = convert_to_whole_number(revenue)
             data.append({"date": date, "data": revenue})
-        return data
+        return data[::-1]
     except:
         raise ValueError(f"Failed to parse data from {url}. Please check the URL or the HTML structure.")

@@ -81,8 +81,6 @@ class DataSource:
         return prices
     
     def get_stock_price_history(self, ticker: str, start_date: str, end_date: str) -> list[dict[str, str]]:
-        import yfinance as yf
-
         ticker_obj = yf.Ticker(ticker)
         hist = ticker_obj.history(start=start_date, end=end_date)
         hist.index = hist.index.strftime('%Y-%m-%d')

@@ -11,7 +11,6 @@ def plot_financial_data(
     _, ax1 = plt.subplots(figsize=(10, 6))
 
     for idx, (label, data) in enumerate(datasets.items()):
-        data = data[::-1]
         values = [float(item['data']) for item in data]
         if dates is None:
             dates = [item['date'] for item in data]
