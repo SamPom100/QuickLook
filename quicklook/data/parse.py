@@ -10,7 +10,7 @@ def convert_to_whole_number(revenue_str: str) -> int:
     else:
         return int(float(clean_str) * 1_000_000)
 
-def parse_table_helper(blob: str, url: str) -> str:
+def parse_table_helper(blob: str, url: str) -> list[dict[str, str]]:
     try:
         soup = bs(blob, "html.parser")
         tables = soup.find_all("table", class_ = "historical_data_table table")

@@ -1,7 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_financial_data(stock_prices=None, stock_name=None, **datasets):
+def plot_financial_data(
+        stock_prices: list[dict[str, str]] = None, 
+        stock_name: str =None, 
+        **datasets: list[dict[str, str]]
+    ):
     colors = plt.cm.tab20.colors
     dates = None
     _, ax1 = plt.subplots(figsize=(10, 6))
