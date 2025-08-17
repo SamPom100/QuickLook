@@ -1,5 +1,6 @@
 from data.datasource import DataSource
-from quicklook.chart.basic_chart import plot_financial_data
+from chart.basic_chart import plot_financial_data
+from chart.scaled_chart import plot_financial_data_scaled
 
 STOCK = 'AMZN'
 
