@@ -31,7 +31,7 @@ except Exception as e:
         datasource.delete_all(STOCK)
         raise e
 
-plot_financial_data(
+plot_financial_data_scaled(
     Revenue=revenue,
     Gross_Profit=gross_profit,
     Operating_Income=operating_income,
