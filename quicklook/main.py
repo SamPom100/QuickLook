@@ -9,7 +9,7 @@ logging.basicConfig(
     format='%(levelname)s: %(name)s: %(message)s'
 )
 
-STOCK = 'AMZN'  
+STOCK = 'PLTR'  
 
 datasource = DataSource()
 
@@ -31,7 +31,7 @@ except Exception as e:
         datasource.delete_all(STOCK)
         raise e
 
-plot_financial_data_scaled(
+plot_financial_data(
     Revenue=revenue,
     Gross_Profit=gross_profit,
     Operating_Income=operating_income,

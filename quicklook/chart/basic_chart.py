@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import mpl_axes_aligner
 
 def plot_financial_data(
         stock_prices: list[dict[str, str]] = None, 
@@ -21,6 +22,8 @@ def plot_financial_data(
 
     stock_dates = [item['date'] for item in stock_prices]
     stock_values = [item['data'] for item in stock_prices]
+    first_value = stock_values[0]
+    stock_values = [stock_value - first_value for stock_value in stock_values]
     stock_x = np.linspace(0, len(dates)-1, len(stock_dates))
     ax2 = ax1.twinx()
     ax2.plot(stock_x, stock_values, color='black', label='Stock Price', linewidth=2, marker='', alpha=0.8)
@@ -30,4 +33,6 @@ def plot_financial_data(
     plt.title(f"{stock_name} Financials and Stock Price")
 
     plt.tight_layout()
+    mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0)
     plt.savefig(f'graph_output/{stock_name}.png', format='png', dpi=300)
+    plt.show()

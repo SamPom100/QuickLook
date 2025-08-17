@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import mpl_axes_aligner
 
 def plot_financial_data_scaled(
         stock_prices: list[dict[str, str]] = None, 
@@ -26,7 +27,7 @@ def plot_financial_data_scaled(
         ax1.bar(x, scaled_values, color=colors[idx % len(colors)], alpha=0.7, label=label)
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(dates, rotation=45, ha='right')
+    ax1.set_xticklabels(dates, rotation=90)
     ax1.legend(loc='upper left')
     ax1.set_ylabel("Scaled Financials (% of Initial Revenue)")
     ax1.grid(True, alpha=0.3)
@@ -43,13 +44,13 @@ def plot_financial_data_scaled(
     scaled_stock_values = [v - initial_stock_price for v in stock_values]
     
     ax2 = ax1.twinx()
-    ax2.plot(stock_x, scaled_stock_values, color='black', linewidth=3, 
-            label='Stock Price Change', alpha=0.9)
+    ax2.plot(stock_x, scaled_stock_values, color='black', linewidth=3, label='Stock Price Change', alpha=0.9)
     ax2.set_ylabel("Stock Price Change ($ from start)")
     ax2.legend(loc='upper right')
 
     plt.title(f"{stock_name} - Scaled Financial Performance vs Stock Price Change\n(Financials normalized to initial revenue, Stock price change from start)")
 
     plt.tight_layout()
+    mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0)
     plt.savefig(f'graph_output/{stock_name}_scaled.png', format='png', dpi=300)
     plt.show()
