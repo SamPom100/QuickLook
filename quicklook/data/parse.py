@@ -24,6 +24,8 @@ def parse_table_helper(blob: str, url: str) -> list[dict[str, str]]:
             quarterly_cell = quarterly_row.find_all("td")
             date = quarterly_cell[0].get_text(strip = True)
             revenue = quarterly_cell[1].get_text(strip=True)
+            if revenue == '' or revenue == 'N/A':
+                continue
             revenue = convert_to_whole_number(revenue)
             data.append({"date": date, "data": revenue})
         return data

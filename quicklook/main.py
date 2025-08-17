@@ -1,8 +1,15 @@
+import logging
 from data.datasource import DataSource
 from chart.basic_chart import plot_financial_data
 from chart.scaled_chart import plot_financial_data_scaled
 
-STOCK = 'AMZN'
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(levelname)s: %(name)s: %(message)s'
+)
+
+STOCK = 'UNH'  
 
 datasource = DataSource()
 
@@ -16,8 +23,13 @@ try:
 
     stock_price_history: list[dict[str, str]] = datasource.get_stock_price_history(STOCK, dates[-1], dates[0])
 except Exception as e:
-    datasource.delete_all(STOCK)
-    raise e
+    if "429" in str(e):
+        logger.error(f"Rate limit exceeded when fetching data for {STOCK}. Slow down.")
+        raise
+    else:
+        logger.error(f"Error fetching data for {STOCK}: {e}")
+        datasource.delete_all(STOCK)
+        raise e
 
 plot_financial_data(
     Revenue=revenue,
