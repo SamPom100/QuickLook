@@ -35,4 +35,4 @@ def plot_financial_data(
     ax2.legend(loc='upper right')
     plt.tight_layout()
     mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0)
-    plt.savefig(f'graph_output/normal/{stock_name}.png', format='png', dpi=300)
+    plt.savefig(f'graph_output/{stock_name}.png', format='png', dpi=300)

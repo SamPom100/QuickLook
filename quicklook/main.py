@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from data.datasource import DataSource
 from chart.basic_chart import plot_financial_data
-from chart.scaled_chart import plot_financial_data_scaled
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -40,15 +39,6 @@ except Exception as e:
         raise e
 
 plot_financial_data(
-    Revenue=revenue,
-    Gross_Profit=gross_profit,
-    Operating_Income=operating_income,
-    Net_Income=net_income,
-    stock_prices=stock_price_history,
-    stock_name=STOCK
-)
-
-plot_financial_data_scaled(
     Revenue=revenue,
     Gross_Profit=gross_profit,
     Operating_Income=operating_income,
