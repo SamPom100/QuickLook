@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from data.datasource import DataSource
 from chart.basic_chart import plot_financial_data
 from chart.scaled_chart import plot_financial_data_scaled
@@ -9,7 +10,7 @@ logging.basicConfig(
     format='%(levelname)s: %(name)s: %(message)s'
 )
 
-STOCK = 'PLTR'  
+STOCK = 'AMZN'  
 
 datasource = DataSource()
 
@@ -19,9 +20,16 @@ try:
     operating_income: list[dict[str, str]] = datasource.get_operating_income(STOCK)
     net_income: list[dict[str, str]] = datasource.get_net_income(STOCK)
 
+    today = datetime.now().strftime('%Y-%m-%d')
     dates: list[str] = [item['date'] for item in revenue]
+    val = {'date': today, 'data': '0'}
 
-    stock_price_history: list[dict[str, str]] = datasource.get_stock_price_history(STOCK, dates[0], dates[-1])
+    revenue.append(val)
+    gross_profit.append(val)
+    operating_income.append(val)
+    net_income.append(val)
+
+    stock_price_history: list[dict[str, str]] = datasource.get_stock_price_history(STOCK, dates[0], today)
 except Exception as e:
     if "429" in str(e):
         logger.error(f"Rate limit exceeded when fetching data for {STOCK}. Slow down.")
@@ -32,6 +40,15 @@ except Exception as e:
         raise e
 
 plot_financial_data(
+    Revenue=revenue,
+    Gross_Profit=gross_profit,
+    Operating_Income=operating_income,
+    Net_Income=net_income,
+    stock_prices=stock_price_history,
+    stock_name=STOCK
+)
+
+plot_financial_data_scaled(
     Revenue=revenue,
     Gross_Profit=gross_profit,
     Operating_Income=operating_income,

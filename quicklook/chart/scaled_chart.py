@@ -8,7 +8,7 @@ def plot_financial_data_scaled(
         **datasets: list[dict[str, str]]
     ):
     colors = plt.cm.tab20.colors
-    _, ax1 = plt.subplots(figsize=(12, 8))
+    _, ax1 = plt.subplots(figsize=(10, 6))
 
     # Get the reference date range from one of the datasets
     first_dataset = next(iter(datasets.values()))
@@ -24,13 +24,7 @@ def plot_financial_data_scaled(
     for idx, (label, data) in enumerate(datasets.items()):
         values = [float(item['data']) for item in data]
         scaled_values = [(v / baseline_value) * 100 for v in values]
-        ax1.bar(x, scaled_values, color=colors[idx % len(colors)], alpha=0.7, label=label)
-
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(dates, rotation=90)
-    ax1.legend(loc='upper left')
-    ax1.set_ylabel("Scaled Financials (% of Initial Revenue)")
-    ax1.grid(True, alpha=0.3)
+        ax1.bar(x, scaled_values, color=colors[idx % len(colors)], alpha=0.9, label=label)
 
     # Scale stock price data starting from 0
     stock_dates = [item['date'][-2:] for item in stock_prices]
@@ -43,14 +37,18 @@ def plot_financial_data_scaled(
     initial_stock_price = stock_values[0]
     scaled_stock_values = [v - initial_stock_price for v in stock_values]
     
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(dates, rotation=90)
+    ax1.legend(loc='upper left')
+    ax1.set_ylabel("Scaled Financials (% of Initial Revenue)")
+    ax1.grid(True, alpha=0.3)
+
     ax2 = ax1.twinx()
-    ax2.plot(stock_x, scaled_stock_values, color='black', linewidth=3, label='Stock Price Change', alpha=0.9)
-    ax2.set_ylabel("Stock Price Change ($ from start)")
+    ax2.plot(stock_x, scaled_stock_values, color='black', linewidth=2, alpha=0.9)
     ax2.legend(loc='upper right')
 
-    plt.title(f"{stock_name} - Scaled Financial Performance vs Stock Price Change\n(Financials normalized to initial revenue, Stock price change from start)")
+    plt.title(f"{stock_name} Financials and Stock Price - Scaled")
 
     plt.tight_layout()
     mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0)
-    plt.savefig(f'graph_output/{stock_name}_scaled.png', format='png', dpi=300)
-    plt.show()
+    plt.savefig(f'graph_output/scaled/{stock_name}_scaled.png', format='png', dpi=300)
