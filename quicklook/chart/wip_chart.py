@@ -55,4 +55,4 @@ def plot_financial_data_wip(
     
     plt.tight_layout()
     mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0)
-    plt.savefig(f'graph_output/{stock_name}_wip.png', format='png', dpi=300)
+    plt.savefig(f'graph_output/{stock_name}.png', format='png', dpi=300)
