@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from data.datasource import DataSource
 from chart.basic_chart import plot_financial_data
+from chart.wip_chart import plot_financial_data_wip
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -9,7 +10,7 @@ logging.basicConfig(
     format='%(levelname)s: %(name)s: %(message)s'
 )
 
-STOCK = 'AMZN'  
+STOCK = 'META'  
 
 datasource = DataSource()
 
@@ -38,11 +39,36 @@ except Exception as e:
         datasource.delete_all(STOCK)
         raise e
 
-plot_financial_data(
+# plot_financial_data(
+#     Revenue=revenue,
+#     Gross_Profit=gross_profit,
+#     Operating_Income=operating_income,
+#     Net_Income=net_income,
+#     stock_prices=stock_price_history,
+#     stock_name=STOCK
+# )
+
+plot_financial_data_wip(
     Revenue=revenue,
     Gross_Profit=gross_profit,
     Operating_Income=operating_income,
     Net_Income=net_income,
     stock_prices=stock_price_history,
     stock_name=STOCK
+)
+
+# truncated to the last 5 years 
+revenue = revenue[-20:]
+gross_profit = gross_profit[-20:]
+operating_income = operating_income[-20:]
+net_income = net_income[-20:]
+stock_price_history = stock_price_history[-60:]
+
+plot_financial_data(
+    Revenue=revenue,
+    Gross_Profit=gross_profit,
+    Operating_Income=operating_income,
+    Net_Income=net_income,
+    stock_prices=stock_price_history,
+    stock_name=STOCK+"_Last5"
 )
