@@ -10,7 +10,7 @@ logging.basicConfig(
     format='%(levelname)s: %(name)s: %(message)s'
 )
 
-STOCK = "AMZN"
+STOCK = "TSM"
 
 datasource = DataSource()
 
