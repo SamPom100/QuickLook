@@ -211,10 +211,12 @@ export default function FinancialChart({ data }) {
       const priceExtent = d3.extent(stockPrices, (d) => d.y);
       const yLeftBottom = d3.scaleLinear().domain([0, (priceExtent[1] || 1) * 1.05]).range([bottomH, 0]).nice();
 
-      // Bottom Pane Right Y-Scale (% Return from Start)
-      const baseP = stockPrices.length > 0 ? stockPrices[0].y : 1;
-      const maxRetPct = ((priceExtent[1] / baseP) - 1) * 100;
-      const yRightBottom = d3.scaleLinear().domain([0, maxRetPct]).range([bottomH, 0]).nice();
+      // Bottom Pane Right Y-Scale (% Return from Start — mathematically aligned!)
+      const domainLeftBottom = yLeftBottom.domain();
+      const baseP = (stockPrices.length > 0 && stockPrices[0].y > 0) ? stockPrices[0].y : 1;
+      const retMax = ((domainLeftBottom[1] / baseP) - 1) * 100;
+      const retMin = -100; // $0 stock price corresponds to -100% return
+      const yRightBottom = d3.scaleLinear().domain([retMin, retMax]).range([bottomH, 0]);
 
       // Grid lines Top
       gTop.append('g')
@@ -346,7 +348,7 @@ export default function FinancialChart({ data }) {
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text('Stock Price ($)');
 
-      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).ticks(4).tickFormat((v) => `+${Math.round(v)}%`));
+      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).ticks(4).tickFormat((v) => `${v >= 0 ? '+' : ''}${Math.round(v)}%`));
       yAxisRightBottom.select('.domain').attr('stroke', '#bbb');
       yAxisRightBottom.selectAll('.tick text').style('font-size', '11px').style('fill', '#059669');
 
