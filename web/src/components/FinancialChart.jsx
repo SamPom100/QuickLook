@@ -53,7 +53,7 @@ export default function FinancialChart({ data }) {
     const numQ = quarters.length;
     const { width, height } = dimensions;
 
-    const margin = { top: 56, right: 75, bottom: 140, left: 60 };
+    const margin = { top: 56, right: 75, bottom: 140, left: 72 };
     const innerW = width - margin.left - margin.right;
     const innerH = height - margin.top - margin.bottom;
 
@@ -189,11 +189,12 @@ export default function FinancialChart({ data }) {
       const gTop = g.append('g');
       const gBottom = g.append('g').attr('transform', `translate(0, ${topH + gap})`);
 
-      // Compute YoY Revenue Growth % for Top Pane
-      const yoyData = quarters.map((q, i) => ({
-        x: i,
-        yoy: (q.yoyRevenueGrowth !== undefined && q.yoyRevenueGrowth !== null) ? q.yoyRevenueGrowth : null
-      }));
+      // Compute Cumulative Revenue Growth % for Top Pane (Starts at 0% at t=0!)
+      const baseRev = (quarters.length > 0 && quarters[0].revenue > 0) ? quarters[0].revenue : 1;
+      const cumRevData = quarters.map((q, i) => {
+        const growth = ((q.revenue - baseRev) / baseRev) * 100;
+        return { x: i, cumRev: Math.round(growth * 10) / 10 };
+      });
 
       // Top Pane Left Y-Scale (Financial Bars $B)
       const allVals = quarters.flatMap((q) => currentMetrics.map((m) => q[m.key]));
@@ -201,24 +202,24 @@ export default function FinancialChart({ data }) {
       const yMinF = allVals.length ? Math.min(0, d3.min(allVals) * 1.1) : 0;
       const yLeftTop = d3.scaleLinear().domain([yMinF, yMaxF]).range([topH, 0]).nice();
 
-      // Top Pane Right Y-Scale (YoY Revenue Growth %)
-      const yoyVals = yoyData.map((d) => d.yoy).filter((v) => v !== null && !isNaN(v));
-      const yoyMax = yoyVals.length ? d3.max(yoyVals) * 1.15 : 50;
-      const yoyMin = yoyVals.length ? Math.min(0, d3.min(yoyVals) * 1.1) : 0;
-      const yRightTop = d3.scaleLinear().domain([yoyMin, yoyMax]).range([topH, 0]).nice();
+      // Top Pane Right Y-Scale (Cumulative Revenue Growth % — synchronized with yLeftTop!)
+      const domainLeftTop = yLeftTop.domain(); // [yMinF, yMaxF]
+      const zeroRatioTop = (0 - domainLeftTop[0]) / (domainLeftTop[1] - domainLeftTop[0]);
+      const cumVals = cumRevData.map((d) => d.cumRev);
+      const cumMax = cumVals.length ? d3.max(cumVals) * 1.12 : 100;
+      const cumMin = zeroRatioTop > 0 ? -cumMax * (zeroRatioTop / (1 - zeroRatioTop)) : 0;
+      const yRightTop = d3.scaleLinear().domain([cumMin, cumMax]).range([topH, 0]);
 
-      // Bottom Pane Left Y-Scale (Stock Price $ — starts at initial stock price!)
+      // Bottom Pane Left Y-Scale (Stock Price $ — starts strictly at initial price baseP!)
       const priceExtent = d3.extent(stockPrices, (d) => d.y);
       const baseP = (stockPrices.length > 0 && stockPrices[0].y > 0) ? stockPrices[0].y : 1;
-      const minP = Math.min(baseP, (priceExtent[0] || baseP)) * 0.95;
+      const minP = Math.min(baseP, (priceExtent[0] || baseP));
       const maxP = (priceExtent[1] || 1) * 1.05;
-      const yLeftBottom = d3.scaleLinear().domain([minP, maxP]).range([bottomH, 0]).nice();
+      const yLeftBottom = d3.scaleLinear().domain([minP, maxP]).range([bottomH, 0]);
 
-      // Bottom Pane Right Y-Scale (% Return from Start — aligned to minP!)
-      const domainLeftBottom = yLeftBottom.domain();
-      const retMin = ((domainLeftBottom[0] / baseP) - 1) * 100;
-      const retMax = ((domainLeftBottom[1] / baseP) - 1) * 100;
-      const yRightBottom = d3.scaleLinear().domain([retMin, retMax]).range([bottomH, 0]);
+      // Bottom Pane Right Y-Scale (% Return — starts strictly at 0%!)
+      const retMax = ((maxP / baseP) - 1) * 100;
+      const yRightBottom = d3.scaleLinear().domain([0, retMax]).range([bottomH, 0]);
 
       // Grid lines Top
       gTop.append('g')
@@ -260,28 +261,28 @@ export default function FinancialChart({ data }) {
         }
       }
 
-      // TOP PANE: Render YoY Revenue Growth % Line
+      // TOP PANE: Render Cumulative Revenue Growth % Line
       if (!hidden.has('yoyGrowth')) {
-        const validYoY = yoyData.filter((d) => d.yoy !== null && !isNaN(d.yoy));
-        if (validYoY.length > 0) {
-          const yoyLine = d3.line()
+        const validCum = cumRevData.filter((d) => d.cumRev !== null && !isNaN(d.cumRev));
+        if (validCum.length > 0) {
+          const cumLine = d3.line()
             .x((d) => xBand(d.x) + xBand.bandwidth() / 2)
-            .y((d) => yRightTop(d.yoy))
+            .y((d) => yRightTop(d.cumRev))
             .curve(d3.curveMonotoneX);
 
           gTop.append('path')
-            .datum(validYoY)
-            .attr('d', yoyLine)
+            .datum(validCum)
+            .attr('d', cumLine)
             .attr('fill', 'none')
             .attr('stroke', '#d97706')
             .attr('stroke-width', 2.2)
             .attr('stroke-dasharray', '4,3');
 
-          gTop.selectAll('.dot-yoy')
-            .data(validYoY)
+          gTop.selectAll('.dot-cumrev')
+            .data(validCum)
             .enter().append('circle')
             .attr('cx', (d) => xBand(d.x) + xBand.bandwidth() / 2)
-            .attr('cy', (d) => yRightTop(d.yoy))
+            .attr('cy', (d) => yRightTop(d.cumRev))
             .attr('r', 3)
             .attr('fill', '#d97706');
         }
@@ -295,12 +296,12 @@ export default function FinancialChart({ data }) {
       gTop.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -topH / 2)
-        .attr('y', -40)
+        .attr('y', -52)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text(`Financials (${data.unitLabel || '$B'})`);
 
-      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).ticks(5).tickFormat((v) => `${v}%`));
+      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).ticks(5).tickFormat((v) => `+${Math.round(v)}%`));
       yAxisRightTop.select('.domain').attr('stroke', '#bbb');
       yAxisRightTop.selectAll('.tick text').style('font-size', '11px').style('fill', '#d97706');
 
@@ -310,7 +311,7 @@ export default function FinancialChart({ data }) {
         .attr('y', -innerW - 52)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#d97706')
-        .text('YoY Revenue Growth (%)');
+        .text('Cumulative Rev Growth (%)');
 
       // Top Pane Title Header
       gTop.append('text')
@@ -319,7 +320,7 @@ export default function FinancialChart({ data }) {
         .style('font-size', '12px')
         .style('font-weight', '700')
         .style('fill', '#475569')
-        .text('PANEL 1: FINANCIAL PERFORMANCE & YOY GROWTH');
+        .text('PANEL 1: FINANCIAL PERFORMANCE & CUMULATIVE REVENUE GROWTH (%)');
 
       // BOTTOM PANE: Render Stock Price Line
       if (showStock && stockPrices.length > 0) {
@@ -337,15 +338,24 @@ export default function FinancialChart({ data }) {
           .attr('stroke-opacity', 0.85);
       }
 
-      // BOTTOM PANE Axes
-      const yAxisLeftBottom = gBottom.append('g').call(d3.axisLeft(yLeftBottom).ticks(4).tickFormat((v) => `$${v}`));
+      // BOTTOM PANE Axes (Forced tickValues to explicitly print baseP at bottom tick!)
+      const spanP = maxP - minP;
+      const customPriceTicks = [
+        minP,
+        minP + spanP * 0.25,
+        minP + spanP * 0.50,
+        minP + spanP * 0.75,
+        maxP
+      ];
+      const yAxisLeftBottom = gBottom.append('g')
+        .call(d3.axisLeft(yLeftBottom).tickValues(customPriceTicks).tickFormat((v) => `$${Math.round(v)}`));
       yAxisLeftBottom.select('.domain').attr('stroke', '#bbb');
       yAxisLeftBottom.selectAll('.tick text').style('font-size', '11px').style('fill', '#444');
 
       gBottom.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -bottomH / 2)
-        .attr('y', -40)
+        .attr('y', -52)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text('Stock Price ($)');
@@ -407,8 +417,7 @@ export default function FinancialChart({ data }) {
             return;
           }
 
-          const q = quarters[qi];
-          const yoyItem = yoyData[qi];
+          const cumItem = cumRevData[qi];
           const si = bisect(stockPrices, xVal);
           const sp = stockPrices[Math.min(si, stockPrices.length - 1)];
 
@@ -419,8 +428,9 @@ export default function FinancialChart({ data }) {
           if (!hidden.has('revenue'))      rows += `<div style="color:rgb(31,119,180)">Revenue: $${fmt(q.revenue)}${unitSuffix}</div>`;
           if (!hidden.has('netIncome'))    rows += `<div style="color:rgb(152,223,138)">Net Income: $${fmt(q.netIncome)}${unitSuffix}</div>`;
           if (!hidden.has('freeCashFlow')) rows += `<div style="color:rgb(44,160,44)">Free Cash Flow: $${fmt(q.freeCashFlow)}${unitSuffix}</div>`;
-          if (!hidden.has('yoyGrowth') && yoyItem && yoyItem.yoy !== null) {
-            rows += `<div style="color:#d97706;font-weight:600">YoY Rev Growth: +${fmt(yoyItem.yoy)}%</div>`;
+          if (!hidden.has('yoyGrowth') && cumItem && cumItem.cumRev !== null) {
+            const sign = cumItem.cumRev >= 0 ? '+' : '';
+            rows += `<div style="color:#d97706;font-weight:600">Cum Rev Growth: ${sign}${fmt(cumItem.cumRev)}%</div>`;
           }
 
           if (!hidden.has('stock') && sp) {
@@ -559,7 +569,7 @@ export default function FinancialChart({ data }) {
 
       // Legend
       const allItems = activeTab === 'cash'
-        ? [...currentMetrics, { key: 'yoyGrowth', label: 'YoY Rev Growth (%)', color: '#d97706', type: 'line' }, { key: 'stock', label: 'Stock Price', color: '#000' }]
+        ? [...currentMetrics, { key: 'yoyGrowth', label: 'Cum Rev Growth (%)', color: '#d97706', type: 'line' }, { key: 'stock', label: 'Stock Price', color: '#000' }]
         : [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Price Index' : 'Stock Price', color: '#000' }];
       const legendG = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 14})`);
       let lx = 0;
