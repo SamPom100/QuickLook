@@ -3,8 +3,6 @@ __pycache__/
 *.pyc
 .vite/
 dist/
-cache/
-*.db
 .env
 .DS_Store
 scratch/
