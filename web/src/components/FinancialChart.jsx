@@ -462,6 +462,37 @@ export default function FinancialChart({ data }) {
         </div>
       </div>
 
+      {/* Competitor Benchmarks Banner */}
+      {data?.peers && data.peers.length > 0 && (
+        <div style={{
+          background: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          padding: '10px 14px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            🏷️ Competitor Benchmarks:
+          </span>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Target Stock */}
+            <div style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#0369a1' }}>
+              <strong>{data.ticker}</strong>: ${kpis.latestPrice || '—'} <span style={{ fontWeight: '700' }}>(P/E: {kpis.ttmPE ? `${kpis.ttmPE}x` : 'N/A'})</span>
+            </div>
+            {/* Peers */}
+            {data.peers.map((p) => (
+              <div key={p.ticker} style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#334155' }}>
+                <strong>{p.ticker}</strong>: ${p.price} <span style={{ color: '#64748b', fontWeight: '600' }}>(P/E: {p.peRatio ? `${p.peRatio}x` : 'N/A'})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* View Mode Switcher Tabs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
         <button

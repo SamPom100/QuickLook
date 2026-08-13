@@ -200,6 +200,8 @@ def get_data(ticker):
         "unitSuffix": unit_suffix,
     }
 
+    peers_data = get_peer_comparison(ticker)
+
     return jsonify({
         "ticker": ticker,
         "unitLabel": unit_label,
@@ -207,7 +209,55 @@ def get_data(ticker):
         "quarters": quarters,
         "stockPrices": stock_prices,
         "kpis": kpis,
+        "peers": peers_data,
     })
+
+
+PEERS = {
+    'MSFT': ['AAPL', 'GOOGL', 'AMZN', 'ORCL'],
+    'AAPL': ['MSFT', 'GOOGL', 'AMZN'],
+    'NVDA': ['AMD', 'INTC', 'AVGO'],
+    'AMZN': ['MSFT', 'GOOGL', 'WMT'],
+    'GOOGL': ['META', 'MSFT', 'AMZN'],
+    'META': ['GOOGL', 'SNAP', 'MSFT'],
+    'TSLA': ['RIVN', 'GM', 'F'],
+    'AMD': ['NVDA', 'INTC', 'AVGO'],
+    'IBM': ['ACN', 'ORCL', 'SAP'],
+    'INTC': ['AMD', 'NVDA', 'TSM'],
+}
+
+
+def get_peer_comparison(ticker: str) -> list:
+    peer_symbols = PEERS.get(ticker.upper(), ['MSFT', 'AAPL', 'GOOGL'])
+    results = []
+    for p_sym in peer_symbols:
+        try:
+            p_price = 0.0
+            val_df = service.get_valuation_history(p_sym, period="1mo")
+            if val_df is not None and not val_df.empty:
+                p_price = float(val_df["Close"].iloc[-1])
+            
+            p_pe = "N/A"
+            url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym.upper()}&apikey=YOUR_ALPHA_KEY_0'
+            cached = cm.get_url_cache(url)
+            if cached:
+                overview = json.loads(cached) if isinstance(cached, str) else cached
+                pe_val = overview.get('PERatio')
+                if pe_val and pe_val != 'None' and pe_val != 'N/A':
+                    p_pe = round(float(pe_val), 2)
+            
+            results.append({
+                "ticker": p_sym,
+                "price": round(p_price, 2) if p_price > 0 else "—",
+                "peRatio": p_pe
+            })
+        except Exception:
+            results.append({
+                "ticker": p_sym,
+                "price": "—",
+                "peRatio": "N/A"
+            })
+    return results
 
 
 if __name__ == "__main__":
