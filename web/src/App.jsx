@@ -37,6 +37,12 @@ export default function App() {
     if (val) fetchData(val);
   };
 
+  const handleSelectTicker = useCallback((t) => {
+    const sym = t.toUpperCase();
+    setInput(sym);
+    fetchData(sym);
+  }, [fetchData]);
+
   return (
     <div style={{ padding: '16px 20px', width: '100%', margin: '0 auto' }}>
       <form onSubmit={handleSubmit} style={{
@@ -127,7 +133,7 @@ export default function App() {
 
       {data && (
         <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
-          <FinancialChart data={data} />
+          <FinancialChart data={data} onSelectTicker={handleSelectTicker} />
         </div>
       )}
     </div>

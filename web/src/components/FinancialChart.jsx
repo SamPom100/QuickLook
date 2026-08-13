@@ -19,7 +19,7 @@ const INDEX_METRICS = [
   { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth Index', color: 'rgb(44, 160, 44)',   type: 'line' },
 ];
 
-export default function FinancialChart({ data }) {
+export default function FinancialChart({ data, onSelectTicker }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -153,14 +153,7 @@ export default function FinancialChart({ data }) {
       yRight = null; // No secondary Y-axis needed! Single shared scale!
     }
 
-    // Grid lines
-    g.append('g')
-      .attr('class', 'grid')
-      .call(d3.axisLeft(yLeft).tickSize(-innerW).tickFormat(''))
-      .selectAll('line')
-      .attr('stroke', '#e5e5e5')
-      .attr('stroke-dasharray', '2,2');
-    g.selectAll('.grid .domain').remove();
+
 
     // Base 100 Reference Line on Tab 3
     if (activeTab === 'growth') {
@@ -221,19 +214,28 @@ export default function FinancialChart({ data }) {
       const retMax = ((maxP / baseP) - 1) * 100;
       const yRightBottom = d3.scaleLinear().domain([0, retMax]).range([bottomH, 0]);
 
-      // Grid lines Top
-      gTop.append('g')
-        .attr('class', 'grid')
-        .call(d3.axisLeft(yLeftTop).tickSize(-innerW).tickFormat(''))
-        .selectAll('line').attr('stroke', '#e5e5e5').attr('stroke-dasharray', '2,2');
-      gTop.selectAll('.grid .domain').remove();
+      // 5 Harmonized Grid Lines for Panel 1 (Top Pane — shared by Left & Right axes!)
+      const spanTopLeft = domainLeftTop[1] - domainLeftTop[0];
+      const spanTopRight = cumMax - cumMin;
+      const customLeftTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => domainLeftTop[0] + spanTopLeft * f);
+      const customRightTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => cumMin + spanTopRight * f);
 
-      // Grid lines Bottom
-      gBottom.append('g')
-        .attr('class', 'grid')
-        .call(d3.axisLeft(yLeftBottom).tickSize(-innerW).tickFormat(''))
-        .selectAll('line').attr('stroke', '#e5e5e5').attr('stroke-dasharray', '2,2');
-      gBottom.selectAll('.grid .domain').remove();
+      for (let f of [0, 0.25, 0.5, 0.75, 1.0]) {
+        const yPos = topH * (1 - f);
+        gTop.append('line')
+          .attr('x1', 0).attr('y1', yPos).attr('x2', innerW).attr('y2', yPos)
+          .attr('stroke', '#e2e8f0').attr('stroke-dasharray', '3,3');
+      }
+
+      // 5 Harmonized Grid Lines for Panel 2 (Bottom Pane — shared by Left & Right axes!)
+      const customRightBottomTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => retMax * f);
+
+      for (let f of [0, 0.25, 0.5, 0.75, 1.0]) {
+        const yPos = bottomH * (1 - f);
+        gBottom.append('line')
+          .attr('x1', 0).attr('y1', yPos).attr('x2', innerW).attr('y2', yPos)
+          .attr('stroke', '#e2e8f0').attr('stroke-dasharray', '3,3');
+      }
 
       // TOP PANE: Render Financial Bars
       for (let qi = 0; qi < numQ; qi++) {
@@ -288,8 +290,8 @@ export default function FinancialChart({ data }) {
         }
       }
 
-      // TOP PANE Axes
-      const yAxisLeftTop = gTop.append('g').call(d3.axisLeft(yLeftTop).ticks(5));
+      // TOP PANE Axes (Harmonized ticks on grid lines!)
+      const yAxisLeftTop = gTop.append('g').call(d3.axisLeft(yLeftTop).tickValues(customLeftTopTicks).tickFormat((v) => `${Math.round(v)}`));
       yAxisLeftTop.select('.domain').attr('stroke', '#bbb');
       yAxisLeftTop.selectAll('.tick text').style('font-size', '11px').style('fill', '#444');
 
@@ -301,7 +303,7 @@ export default function FinancialChart({ data }) {
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text(`Financials (${data.unitLabel || '$B'})`);
 
-      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).ticks(5).tickFormat((v) => `+${Math.round(v)}%`));
+      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).tickValues(customRightTopTicks).tickFormat((v) => `+${Math.round(v)}%`));
       yAxisRightTop.select('.domain').attr('stroke', '#bbb');
       yAxisRightTop.selectAll('.tick text').style('font-size', '11px').style('fill', '#d97706');
 
@@ -338,15 +340,10 @@ export default function FinancialChart({ data }) {
           .attr('stroke-opacity', 0.85);
       }
 
-      // BOTTOM PANE Axes (Forced tickValues to explicitly print baseP at bottom tick!)
+      // BOTTOM PANE Axes (Harmonized ticks on grid lines!)
       const spanP = maxP - minP;
-      const customPriceTicks = [
-        minP,
-        minP + spanP * 0.25,
-        minP + spanP * 0.50,
-        minP + spanP * 0.75,
-        maxP
-      ];
+      const customPriceTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => minP + spanP * f);
+
       const yAxisLeftBottom = gBottom.append('g')
         .call(d3.axisLeft(yLeftBottom).tickValues(customPriceTicks).tickFormat((v) => `$${Math.round(v)}`));
       yAxisLeftBottom.select('.domain').attr('stroke', '#bbb');
@@ -360,7 +357,7 @@ export default function FinancialChart({ data }) {
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text('Stock Price ($)');
 
-      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).ticks(4).tickFormat((v) => `${v >= 0 ? '+' : ''}${Math.round(v)}%`));
+      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).tickValues(customRightBottomTicks).tickFormat((v) => `+${Math.round(v)}%`));
       yAxisRightBottom.select('.domain').attr('stroke', '#bbb');
       yAxisRightBottom.selectAll('.tick text').style('font-size', '11px').style('fill', '#059669');
 
@@ -679,7 +676,7 @@ export default function FinancialChart({ data }) {
 
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
-      {/* KPI Cards Header */}
+      {/* KPI Cards Header — Commented Out
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
@@ -707,6 +704,7 @@ export default function FinancialChart({ data }) {
           <div style={cardValueStyle}>{kpis.ttmPE ? `${kpis.ttmPE}x` : '—'}</div>
         </div>
       </div>
+      */}
 
       {/* Competitor Benchmarks Banner */}
       {data?.peers && data.peers.length > 0 && (
@@ -731,9 +729,34 @@ export default function FinancialChart({ data }) {
             </div>
             {/* Peers */}
             {data.peers.map((p) => (
-              <div key={p.ticker} style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#334155' }}>
+              <button
+                key={p.ticker}
+                onClick={() => onSelectTicker && onSelectTicker(p.ticker)}
+                title={`Click to view ${p.ticker}`}
+                style={{
+                  background: '#fff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  color: '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  outline: 'none',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#0284c7';
+                  e.currentTarget.style.background = '#f0f9ff';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                  e.currentTarget.style.background = '#fff';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
                 <strong>{p.ticker}</strong>: ${p.price} <span style={{ color: '#64748b', fontWeight: '600' }}>(P/E: {p.peRatio ? `${p.peRatio}x` : 'N/A'})</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
