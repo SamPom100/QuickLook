@@ -14,9 +14,9 @@ const VALUATION_METRICS = [
 ];
 
 const INDEX_METRICS = [
-  { key: 'revenueIdx',      label: 'Revenue Growth Index',        color: 'rgb(31, 119, 180)',  type: 'line' },
-  { key: 'netIncomeIdx',    label: 'Net Income Growth Index',     color: 'rgb(152, 223, 138)', type: 'line' },
-  { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth Index', color: 'rgb(44, 160, 44)',   type: 'line' },
+  { key: 'revenueIdx',      label: 'Revenue Growth (%)',        color: 'rgb(31, 119, 180)',  type: 'line' },
+  { key: 'netIncomeIdx',    label: 'Net Income Growth (%)',     color: 'rgb(152, 223, 138)', type: 'line' },
+  { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth (%)', color: 'rgb(44, 160, 44)',   type: 'line' },
 ];
 
 export default function FinancialChart({ data, onSelectTicker }) {
@@ -53,7 +53,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
     const numQ = quarters.length;
     const { width, height } = dimensions;
 
-    const margin = { top: 56, right: 75, bottom: 140, left: 72 };
+    const margin = { top: 56, right: 75, bottom: 140, left: 88 };
     const innerW = width - margin.left - margin.right;
     const innerH = height - margin.top - margin.bottom;
 
@@ -66,7 +66,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
     const labels = quarters.map((q) => q.date);
     labels.push('Today');
 
-    // Compute Base 100 Indexed series for Tab 3 ('growth')
+    // Compute Percentage Growth (%) series for Tab 3 ('growth') — Base = 0%!
     const firstQ = quarters[0] || {};
     const baseRev = firstQ.revenue || 1;
     const baseNI = firstQ.netIncome || 1;
@@ -74,15 +74,15 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
     const indexedQuarters = quarters.map((q) => ({
       ...q,
-      revenueIdx: ((q.revenue / baseRev) * 100),
-      netIncomeIdx: ((q.netIncome / baseNI) * 100),
-      freeCashFlowIdx: ((q.freeCashFlow / baseFCF) * 100),
+      revenueIdx: (((q.revenue - baseRev) / Math.abs(baseRev)) * 100),
+      netIncomeIdx: (((q.netIncome - baseNI) / Math.abs(baseNI)) * 100),
+      freeCashFlowIdx: (((q.freeCashFlow - baseFCF) / Math.abs(baseFCF)) * 100),
     }));
 
     const baseStockPrice = (stockPrices && stockPrices.length > 0) ? stockPrices[0].y : 1;
     const indexedStockPrices = stockPrices.map((sp) => ({
       ...sp,
-      yIdx: ((sp.y / baseStockPrice) * 100),
+      yIdx: (((sp.y - baseStockPrice) / baseStockPrice) * 100),
     }));
 
     let currentMetrics;
@@ -110,7 +110,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
     let leftAxisTitle;
     if (activeTab === 'cash') leftAxisTitle = data.unitLabel || '$B';
     else if (activeTab === 'valuation') leftAxisTitle = 'Multiple (x) / Yield (%)';
-    else leftAxisTitle = 'Growth Index (Base 100)';
+    else leftAxisTitle = 'Cumulative Growth since Start (%)';
 
     if (activeTab === 'cash') {
       const allVals = quarters.flatMap((q) => currentMetrics.map((m) => q[m.key]));
@@ -141,39 +141,39 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
       yRight = d3.scaleLinear().domain([pMin, pMax]).range([innerH, 0]);
     } else {
-      // TAB 3: Relative Growth (Single shared Base 100 scale!)
+      // TAB 3: Relative Growth (Single shared Percentage Growth scale!)
       const allIdxVals = [
         ...indexedQuarters.flatMap((q) => visibleMetrics.map((m) => q[m.key])),
-        ...(showStock ? indexedStockPrices.map((sp) => sp.yIdx) : [100])
+        ...(showStock ? indexedStockPrices.map((sp) => sp.yIdx) : [0])
       ].filter((v) => v !== null && v !== undefined && !isNaN(v));
 
-      const yMaxIdx = d3.max(allIdxVals) ? d3.max(allIdxVals) * 1.1 : 200;
-      const yMinIdx = d3.min(allIdxVals) ? Math.min(0, d3.min(allIdxVals) * 0.9) : 0;
+      const yMaxIdx = allIdxVals.length ? d3.max(allIdxVals) * 1.1 : 100;
+      const yMinIdx = allIdxVals.length ? Math.min(0, d3.min(allIdxVals) * 1.1) : 0;
       yLeft = d3.scaleLinear().domain([yMinIdx, yMaxIdx]).range([innerH, 0]).nice();
       yRight = null; // No secondary Y-axis needed! Single shared scale!
     }
 
-
-
-    // Base 100 Reference Line on Tab 3
+    // 0% Reference Line on Tab 3
     if (activeTab === 'growth') {
       g.append('line')
         .attr('x1', 0)
-        .attr('y1', yLeft(100))
+        .attr('y1', yLeft(0))
         .attr('x2', innerW)
-        .attr('y2', yLeft(100))
-        .attr('stroke', '#888')
+        .attr('y2', yLeft(0))
+        .attr('stroke', '#64748b')
         .attr('stroke-dasharray', '4,4')
         .attr('stroke-width', 1.5);
 
       g.append('text')
         .attr('x', 6)
-        .attr('y', yLeft(100) - 6)
+        .attr('y', yLeft(0) - 6)
         .style('font-size', '11px')
-        .style('fill', '#666')
+        .style('fill', '#475569')
         .style('font-weight', '600')
-        .text('Base 100 Baseline');
-    }    // RENDER TAB 1: 2 STACKED SUB-PANES (Top: Financial Bars + YoY Growth %; Bottom: Stock Price $ + Return %)
+        .text('0% Baseline (Start)');
+    }
+
+    // RENDER TAB 1: 2 STACKED SUB-PANES (Top: Financial Bars + YoY Growth %; Bottom: Stock Price $ + Return %)
     if (activeTab === 'cash') {
       const gap = 48;
       const topH = innerH * 0.54;
@@ -427,6 +427,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
             return;
           }
 
+          const q = quarters[qi];
           const cumItem = cumRevData[qi];
           const si = bisect(stockPrices, xVal);
           const sp = stockPrices[Math.min(si, stockPrices.length - 1)];
@@ -526,7 +527,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
       xAxis.selectAll('.tick line').attr('stroke', '#bbb');
 
       // Y Left Axis
-      const yAxisLeft = g.append('g').call(d3.axisLeft(yLeft).ticks(8).tickFormat((v) => activeTab === 'growth' ? `${Math.round(v)}` : `${v}`));
+      const yAxisLeft = g.append('g').call(d3.axisLeft(yLeft).ticks(8).tickFormat((v) => activeTab === 'growth' ? `${v > 0 ? '+' : ''}${Math.round(v)}%` : `${v}`));
       yAxisLeft.select('.domain').attr('stroke', '#bbb');
       yAxisLeft.selectAll('.tick text').style('font-size', '11px').style('fill', '#444');
       yAxisLeft.selectAll('.tick line').attr('stroke', '#bbb');
@@ -534,7 +535,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
       g.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -innerH / 2)
-        .attr('y', -38)
+        .attr('y', -58)
         .attr('text-anchor', 'middle')
         .style('font-size', '13px')
         .style('font-weight', '600')
@@ -566,7 +567,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
       let titleText = `${ticker} — `;
       if (activeTab === 'cash') titleText += 'Financial Performance & Stock Price';
       else if (activeTab === 'valuation') titleText += 'Valuation History (P/E, P/S, FCF Yield & Stock Price)';
-      else titleText += 'Relative Growth Index (Fundamentals vs Stock Price, Base = 100)';
+      else titleText += 'Relative Growth (% Return since Start)';
 
       svg.append('text')
         .attr('x', width / 2)
@@ -580,8 +581,8 @@ export default function FinancialChart({ data, onSelectTicker }) {
       // Legend
       const allItems = activeTab === 'cash'
         ? [...currentMetrics, { key: 'yoyGrowth', label: 'Cum Rev Growth (%)', color: '#d97706', type: 'line' }, { key: 'stock', label: 'Stock Price', color: '#000' }]
-        : [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Price Index' : 'Stock Price', color: '#000' }];
-      const legendG = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 14})`);
+        : [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Return (%)' : 'Stock Price', color: '#000' }];
+      const legendG = svg.append('g').attr('transform', `translate(${margin.left + 50}, ${margin.top - 18})`);
       let lx = 0;
 
       for (const item of allItems) {
@@ -658,15 +659,16 @@ export default function FinancialChart({ data, onSelectTicker }) {
             if (!hidden.has('fcfYield')) rows += `<div style="color:rgb(44,160,44)">FCF Yield: ${q.fcfYield ? fmt(q.fcfYield) + '%' : 'N/A'}</div>`;
           } else {
             // Tab 3 Tooltip
-            if (!hidden.has('revenueIdx'))      rows += `<div style="color:rgb(31,119,180)">Revenue Index: ${fmt(qIdx.revenueIdx)} <span style="font-size:11px;opacity:0.8">(${fmt(qIdx.revenueIdx - 100)}% growth)</span></div>`;
-            if (!hidden.has('netIncomeIdx'))    rows += `<div style="color:rgb(152,223,138)">Net Income Index: ${fmt(qIdx.netIncomeIdx)} <span style="font-size:11px;opacity:0.8">(${fmt(qIdx.netIncomeIdx - 100)}% growth)</span></div>`;
-            if (!hidden.has('freeCashFlowIdx')) rows += `<div style="color:rgb(44,160,44)">FCF Index: ${fmt(qIdx.freeCashFlowIdx)} <span style="font-size:11px;opacity:0.8">(${fmt(qIdx.freeCashFlowIdx - 100)}% growth)</span></div>`;
+            if (!hidden.has('revenueIdx'))      rows += `<div style="color:rgb(31,119,180)">Revenue Growth: ${qIdx.revenueIdx >= 0 ? '+' : ''}${fmt(qIdx.revenueIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.revenue)}B)</span></div>`;
+            if (!hidden.has('netIncomeIdx'))    rows += `<div style="color:rgb(152,223,138)">Net Income Growth: ${qIdx.netIncomeIdx >= 0 ? '+' : ''}${fmt(qIdx.netIncomeIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.netIncome)}B)</span></div>`;
+            if (!hidden.has('freeCashFlowIdx')) rows += `<div style="color:rgb(44,160,44)">FCF Growth: ${qIdx.freeCashFlowIdx >= 0 ? '+' : ''}${fmt(qIdx.freeCashFlowIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.freeCashFlow)}B)</span></div>`;
           }
 
           if (!hidden.has('stock')) {
             if (activeTab === 'growth') {
-              const pct = spIdx ? (spIdx.yIdx - 100).toFixed(1) : '0';
-              rows += `<div style="margin-top:4px;border-top:1px solid #444;padding-top:4px">Stock Index: ${spIdx ? spIdx.yIdx.toFixed(1) : '—'} <span style="font-size:11px;opacity:0.8">(${pct}% growth, $${sp ? sp.y.toFixed(2) : '—'})</span></div>`;
+              const pct = spIdx ? spIdx.yIdx : 0;
+              const sign = pct >= 0 ? '+' : '';
+              rows += `<div style="margin-top:4px;border-top:1px solid #444;padding-top:4px">Stock Return: ${sign}${fmt(pct)}% <span style="font-size:11px;opacity:0.8">($${sp ? sp.y.toFixed(2) : '—'})</span></div>`;
             } else {
               rows += `<div style="margin-top:4px;border-top:1px solid #444;padding-top:4px">Stock: $${sp ? sp.y.toFixed(2) : '—'}</div>`;
             }
@@ -808,7 +810,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
             fontWeight: activeTab === 'growth' ? '700' : '500',
           }}
         >
-          🚀 Relative Growth (Base 100 Index)
+          🚀 Relative Growth (% Return)
         </button>
       </div>
 
