@@ -207,15 +207,17 @@ export default function FinancialChart({ data }) {
       const yoyMin = yoyVals.length ? Math.min(0, d3.min(yoyVals) * 1.1) : 0;
       const yRightTop = d3.scaleLinear().domain([yoyMin, yoyMax]).range([topH, 0]).nice();
 
-      // Bottom Pane Left Y-Scale (Stock Price $)
+      // Bottom Pane Left Y-Scale (Stock Price $ — starts at initial stock price!)
       const priceExtent = d3.extent(stockPrices, (d) => d.y);
-      const yLeftBottom = d3.scaleLinear().domain([0, (priceExtent[1] || 1) * 1.05]).range([bottomH, 0]).nice();
-
-      // Bottom Pane Right Y-Scale (% Return from Start — mathematically aligned!)
-      const domainLeftBottom = yLeftBottom.domain();
       const baseP = (stockPrices.length > 0 && stockPrices[0].y > 0) ? stockPrices[0].y : 1;
+      const minP = Math.min(baseP, (priceExtent[0] || baseP)) * 0.95;
+      const maxP = (priceExtent[1] || 1) * 1.05;
+      const yLeftBottom = d3.scaleLinear().domain([minP, maxP]).range([bottomH, 0]).nice();
+
+      // Bottom Pane Right Y-Scale (% Return from Start — aligned to minP!)
+      const domainLeftBottom = yLeftBottom.domain();
+      const retMin = ((domainLeftBottom[0] / baseP) - 1) * 100;
       const retMax = ((domainLeftBottom[1] / baseP) - 1) * 100;
-      const retMin = -100; // $0 stock price corresponds to -100% return
       const yRightBottom = d3.scaleLinear().domain([retMin, retMax]).range([bottomH, 0]);
 
       // Grid lines Top
