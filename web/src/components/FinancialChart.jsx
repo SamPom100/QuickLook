@@ -244,8 +244,8 @@ export default function FinancialChart({ data }) {
         .attr('d', stockLine)
         .attr('fill', 'none')
         .attr('stroke', '#000')
-        .attr('stroke-width', activeTab === 'growth' ? 3 : 2)
-        .attr('stroke-opacity', 0.9);
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.8);
     }
 
     // X Axis — bold date ticks
