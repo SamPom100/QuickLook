@@ -114,6 +114,10 @@ def get_data(ticker):
         om_pct = round((op / rev * 100), 2) if rev > 0 else 0.0
         nm_pct = round((ni / rev * 100), 2) if rev > 0 else 0.0
 
+        yoy_rev = None
+        if i >= 4 and rev_raw[i - 4] > 0:
+            yoy_rev = round(((rev - float(rev_raw[i - 4])) / float(rev_raw[i - 4])) * 100, 1)
+
         quarters.append({
             "date": row["dt"].strftime("%Y-%m-%d"),
             "revenue": round(rev / divisor, 2),
@@ -124,6 +128,7 @@ def get_data(ticker):
             "grossMarginPct": gm_pct,
             "operatingMarginPct": om_pct,
             "netMarginPct": nm_pct,
+            "yoyRevenueGrowth": yoy_rev,
         })
 
     stock_prices = []

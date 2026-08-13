@@ -190,13 +190,10 @@ export default function FinancialChart({ data }) {
       const gBottom = g.append('g').attr('transform', `translate(0, ${topH + gap})`);
 
       // Compute YoY Revenue Growth % for Top Pane
-      const yoyData = quarters.map((q, i) => {
-        if (i < 4) return { x: i, yoy: null };
-        const prevQ = quarters[i - 4];
-        if (!prevQ || !prevQ.revenue || prevQ.revenue <= 0) return { x: i, yoy: null };
-        const growth = ((q.revenue - prevQ.revenue) / prevQ.revenue) * 100;
-        return { x: i, yoy: (Math.round(growth * 10) / 10) };
-      });
+      const yoyData = quarters.map((q, i) => ({
+        x: i,
+        yoy: (q.yoyRevenueGrowth !== undefined && q.yoyRevenueGrowth !== null) ? q.yoyRevenueGrowth : null
+      }));
 
       // Top Pane Left Y-Scale (Financial Bars $B)
       const allVals = quarters.flatMap((q) => currentMetrics.map((m) => q[m.key]));
