@@ -196,7 +196,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
       const yLeftTop = d3.scaleLinear().domain([yMinF, yMaxF]).range([topH, 0]).nice();
 
       // Top Pane Right Y-Scale (Cumulative Revenue Growth % — synchronized with yLeftTop!)
-      const domainLeftTop = yLeftTop.domain(); // [yMinF, yMaxF]
+      const domainLeftTop = yLeftTop.domain(); // [yMinF, yMaxF] e.g. [-10, 100]
       const zeroRatioTop = (0 - domainLeftTop[0]) / (domainLeftTop[1] - domainLeftTop[0]);
       const cumVals = cumRevData.map((d) => d.cumRev);
       const cumMax = cumVals.length ? d3.max(cumVals) * 1.12 : 100;
@@ -214,17 +214,30 @@ export default function FinancialChart({ data, onSelectTicker }) {
       const retMax = ((maxP / baseP) - 1) * 100;
       const yRightBottom = d3.scaleLinear().domain([0, retMax]).range([bottomH, 0]);
 
-      // 5 Harmonized Grid Lines for Panel 1 (Top Pane — shared by Left & Right axes!)
-      const spanTopLeft = domainLeftTop[1] - domainLeftTop[0];
-      const spanTopRight = cumMax - cumMin;
-      const customLeftTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => domainLeftTop[0] + spanTopLeft * f);
-      const customRightTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => cumMin + spanTopRight * f);
+      // Explicit Ticks for Panel 1 including forced 0 tick mark
+      let customLeftTopTicks;
+      let customRightTopTicks;
 
-      for (let f of [0, 0.25, 0.5, 0.75, 1.0]) {
-        const yPos = topH * (1 - f);
+      if (domainLeftTop[0] < 0) {
+        const bottomVal = Math.round(domainLeftTop[0]); // e.g. -10
+        const topVal = Math.round(domainLeftTop[1]); // e.g. 100
+        customLeftTopTicks = [bottomVal, 0, Math.round(topVal * 0.25), Math.round(topVal * 0.5), Math.round(topVal * 0.75), topVal];
+        customRightTopTicks = [Math.round(cumMin), 0, Math.round(cumMax * 0.25), Math.round(cumMax * 0.5), Math.round(cumMax * 0.75), Math.round(cumMax)];
+      } else {
+        const spanTopLeft = domainLeftTop[1] - domainLeftTop[0];
+        const spanTopRight = cumMax - cumMin;
+        customLeftTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => domainLeftTop[0] + spanTopLeft * f);
+        customRightTopTicks = [0, 0.25, 0.5, 0.75, 1.0].map((f) => cumMin + spanTopRight * f);
+      }
+
+      // Draw Grid Lines for Top Pane
+      for (let tickVal of customLeftTopTicks) {
+        const yPos = yLeftTop(tickVal);
         gTop.append('line')
           .attr('x1', 0).attr('y1', yPos).attr('x2', innerW).attr('y2', yPos)
-          .attr('stroke', '#e2e8f0').attr('stroke-dasharray', '3,3');
+          .attr('stroke', tickVal === 0 ? '#64748b' : '#e2e8f0')
+          .attr('stroke-dasharray', tickVal === 0 ? '4,4' : '3,3')
+          .attr('stroke-width', tickVal === 0 ? 1.5 : 1);
       }
 
       // 5 Harmonized Grid Lines for Panel 2 (Bottom Pane — shared by Left & Right axes!)
@@ -303,7 +316,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text(`Financials (${data.unitLabel || '$B'})`);
 
-      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).tickValues(customRightTopTicks).tickFormat((v) => `+${Math.round(v)}%`));
+      const yAxisRightTop = gTop.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightTop).tickValues(customRightTopTicks).tickFormat((v) => `${v > 0 ? '+' : ''}${Math.round(v)}%`));
       yAxisRightTop.select('.domain').attr('stroke', '#bbb');
       yAxisRightTop.selectAll('.tick text').style('font-size', '11px').style('fill', '#d97706');
 
@@ -357,7 +370,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
         .style('font-size', '12px').style('font-weight', '600').style('fill', '#333')
         .text('Stock Price ($)');
 
-      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).tickValues(customRightBottomTicks).tickFormat((v) => `+${Math.round(v)}%`));
+      const yAxisRightBottom = gBottom.append('g').attr('transform', `translate(${innerW},0)`).call(d3.axisRight(yRightBottom).tickValues(customRightBottomTicks).tickFormat((v) => `${v > 0 ? '+' : ''}${Math.round(v)}%`));
       yAxisRightBottom.select('.domain').attr('stroke', '#bbb');
       yAxisRightBottom.selectAll('.tick text').style('font-size', '11px').style('fill', '#059669');
 
