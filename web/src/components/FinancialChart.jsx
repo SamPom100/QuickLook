@@ -118,8 +118,13 @@ export default function FinancialChart({ data }) {
       const yMinF = allVals.length ? Math.min(0, d3.min(allVals) * 1.1) : 0;
       yLeft = d3.scaleLinear().domain([yMinF, yMaxF]).range([innerH, 0]).nice();
 
+      const domainLeft = yLeft.domain();
+      const zeroRatio = (0 - domainLeft[0]) / (domainLeft[1] - domainLeft[0]);
       const priceExtent = d3.extent(stockPrices, (d) => d.y);
-      yRight = d3.scaleLinear().domain([0, (priceExtent[1] || 1) * 1.05]).range([innerH, 0]).nice();
+      const pMax = (priceExtent[1] || 1) * 1.05;
+      const pMin = zeroRatio > 0 ? -pMax * (zeroRatio / (1 - zeroRatio)) : 0;
+
+      yRight = d3.scaleLinear().domain([pMin, pMax]).range([innerH, 0]);
     } else if (activeTab === 'valuation') {
       const allVals = quarters.flatMap((q) =>
         currentMetrics.map((m) => q[m.key]).filter((v) => v !== null && v !== undefined)
@@ -128,8 +133,13 @@ export default function FinancialChart({ data }) {
       const yMinF = allVals.length ? Math.min(0, d3.min(allVals) * 1.1) : 0;
       yLeft = d3.scaleLinear().domain([yMinF, yMaxF]).range([innerH, 0]).nice();
 
+      const domainLeft = yLeft.domain();
+      const zeroRatio = (0 - domainLeft[0]) / (domainLeft[1] - domainLeft[0]);
       const priceExtent = d3.extent(stockPrices, (d) => d.y);
-      yRight = d3.scaleLinear().domain([0, (priceExtent[1] || 1) * 1.05]).range([innerH, 0]).nice();
+      const pMax = (priceExtent[1] || 1) * 1.05;
+      const pMin = zeroRatio > 0 ? -pMax * (zeroRatio / (1 - zeroRatio)) : 0;
+
+      yRight = d3.scaleLinear().domain([pMin, pMax]).range([innerH, 0]);
     } else {
       // TAB 3: Relative Growth (Single shared Base 100 scale!)
       const allIdxVals = [
