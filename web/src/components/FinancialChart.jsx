@@ -557,7 +557,9 @@ export default function FinancialChart({ data }) {
         .text(titleText);
 
       // Legend
-      const allItems = [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Price Index' : 'Stock Price', color: '#000' }];
+      const allItems = activeTab === 'cash'
+        ? [...currentMetrics, { key: 'yoyGrowth', label: 'YoY Rev Growth (%)', color: '#d97706', type: 'line' }, { key: 'stock', label: 'Stock Price', color: '#000' }]
+        : [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Price Index' : 'Stock Price', color: '#000' }];
       const legendG = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 14})`);
       let lx = 0;
 
