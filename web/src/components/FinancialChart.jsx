@@ -1,0 +1,463 @@
+import { useEffect, useRef, useState } from 'react';
+import * as d3 from 'd3';
+
+const CASH_METRICS = [
+  { key: 'revenue',      label: 'Revenue',        color: 'rgb(31, 119, 180)',  widthFrac: 1.0,  type: 'bar' },
+  { key: 'netIncome',    label: 'Net Income',     color: 'rgb(152, 223, 138)', widthFrac: 0.82, type: 'bar' },
+  { key: 'freeCashFlow', label: 'Free Cash Flow', color: 'rgb(44, 160, 44)',   widthFrac: 0.64, type: 'bar' },
+];
+
+const MARGIN_METRICS = [
+  { key: 'grossMarginPct',     label: 'Gross Margin %',     color: 'rgb(31, 119, 180)', type: 'line' },
+  { key: 'operatingMarginPct', label: 'Operating Margin %', color: 'rgb(255, 127, 14)',  type: 'line' },
+  { key: 'netMarginPct',       label: 'Net Margin %',       color: 'rgb(44, 160, 44)',   type: 'line' },
+  { key: 'peRatio',            label: 'P/E Ratio (TTM)',    color: 'rgb(148, 103, 189)',type: 'line' },
+];
+
+export default function FinancialChart({ data }) {
+  const containerRef = useRef(null);
+  const svgRef = useRef(null);
+  const tooltipRef = useRef(null);
+
+  const [activeTab, setActiveTab] = useState('cash'); // 'cash' or 'margins'
+  const [dimensions, setDimensions] = useState({ width: 1400, height: 750 });
+  const [hidden, setHidden] = useState(new Set());
+
+  // Responsive resize — fill viewport
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth - 40;
+      const h = window.innerHeight - 200;
+      setDimensions({ width: Math.max(w, 600), height: Math.max(h, 380) });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Reset hidden state on tab switch or data change
+  useEffect(() => {
+    setHidden(new Set());
+  }, [data, activeTab]);
+
+  // D3 rendering
+  useEffect(() => {
+    if (!data || !svgRef.current) return;
+
+    const { quarters, stockPrices, ticker, kpis } = data;
+    const numQ = quarters.length;
+    const { width, height } = dimensions;
+
+    const margin = { top: 56, right: 75, bottom: 140, left: 50 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
+    svg.attr('width', width).attr('height', height);
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const labels = quarters.map((q) => q.date);
+    labels.push('Today');
+
+    const currentMetrics = activeTab === 'cash' ? CASH_METRICS : MARGIN_METRICS;
+    const visibleMetrics = currentMetrics.filter((m) => !hidden.has(m.key));
+    const showStock = !hidden.has('stock');
+
+    // X scales
+    const xBand = d3.scaleBand()
+      .domain(d3.range(numQ + 1))
+      .range([0, innerW])
+      .padding(0);
+
+    const xLin = d3.scaleLinear()
+      .domain([0, numQ])
+      .range([xBand.bandwidth() / 2, innerW - xBand.bandwidth() / 2]);
+
+    // Y Left scale calculation
+    let yLeft;
+    const unitSuffix = data.unitSuffix || 'B';
+    const leftAxisTitle = activeTab === 'cash' ? (data.unitLabel || '$B') : '% / Multiple';
+
+    if (activeTab === 'cash') {
+      const allVals = quarters.flatMap((q) => currentMetrics.map((m) => q[m.key]));
+      const yMaxF = allVals.length ? d3.max(allVals) * 1.08 : 1;
+      const yMinF = allVals.length ? Math.min(0, d3.min(allVals) * 1.1) : 0;
+      yLeft = d3.scaleLinear().domain([yMinF, yMaxF]).range([innerH, 0]).nice();
+    } else {
+      const allVals = quarters.flatMap((q) =>
+        currentMetrics.map((m) => q[m.key]).filter((v) => v !== null && v !== undefined)
+      );
+      const yMaxF = allVals.length ? d3.max(allVals) * 1.1 : 100;
+      const yMinF = allVals.length ? Math.min(0, d3.min(allVals) * 1.05) : 0;
+      yLeft = d3.scaleLinear().domain([yMinF, yMaxF]).range([innerH, 0]).nice();
+    }
+
+    // Y Right scale (Stock Price)
+    const priceExtent = d3.extent(stockPrices, (d) => d.y);
+    const yRight = d3.scaleLinear()
+      .domain([0, (priceExtent[1] || 1) * 1.05])
+      .range([innerH, 0])
+      .nice();
+
+    // Grid lines
+    g.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(yLeft).tickSize(-innerW).tickFormat(''))
+      .selectAll('line')
+      .attr('stroke', '#e5e5e5')
+      .attr('stroke-dasharray', '2,2');
+    g.selectAll('.grid .domain').remove();
+
+    // RENDER TAB 1: BARS (Cash & Earnings)
+    if (activeTab === 'cash') {
+      for (let qi = 0; qi < numQ; qi++) {
+        const q = quarters[qi];
+        const cx = xBand(qi) + xBand.bandwidth() / 2;
+        const bw = xBand.bandwidth();
+
+        const entries = visibleMetrics.map((m) => ({ ...m, value: q[m.key] }));
+        entries.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+
+        for (const entry of entries) {
+          const barW = bw * entry.widthFrac;
+          const yVal = yLeft(entry.value);
+          const yZero = yLeft(0);
+          const barH = Math.abs(yVal - yZero);
+          const barY = entry.value >= 0 ? yVal : yZero;
+
+          g.append('rect')
+            .attr('x', cx - barW / 2)
+            .attr('y', barY)
+            .attr('width', barW)
+            .attr('height', barH)
+            .attr('fill', entry.color)
+            .attr('opacity', 0.9);
+        }
+      }
+    } else {
+      // RENDER TAB 2: LINES (Margins & Fundamentals)
+      for (const m of visibleMetrics) {
+        const lineData = quarters
+          .map((q, i) => ({ x: i, y: q[m.key] }))
+          .filter((d) => d.y !== null && d.y !== undefined);
+
+        if (lineData.length > 0) {
+          const metricLine = d3.line()
+            .x((d) => xBand(d.x) + xBand.bandwidth() / 2)
+            .y((d) => yLeft(d.y))
+            .curve(d3.curveMonotoneX);
+
+          g.append('path')
+            .datum(lineData)
+            .attr('d', metricLine)
+            .attr('fill', 'none')
+            .attr('stroke', m.color)
+            .attr('stroke-width', 2.5);
+
+          // Dot points
+          g.selectAll(`.dot-${m.key}`)
+            .data(lineData)
+            .enter()
+            .append('circle')
+            .attr('cx', (d) => xBand(d.x) + xBand.bandwidth() / 2)
+            .attr('cy', (d) => yLeft(d.y))
+            .attr('r', 3)
+            .attr('fill', m.color);
+        }
+      }
+    }
+
+    // Stock price line
+    if (showStock && stockPrices.length > 0) {
+      const stockLine = d3.line()
+        .x((d) => xLin(d.x))
+        .y((d) => yRight(d.y))
+        .curve(d3.curveLinear);
+
+      g.append('path')
+        .datum(stockPrices)
+        .attr('d', stockLine)
+        .attr('fill', 'none')
+        .attr('stroke', '#000')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.8);
+    }
+
+    // X Axis — bold date ticks
+    const xAxis = g.append('g')
+      .attr('transform', `translate(0,${innerH})`)
+      .call(d3.axisBottom(xBand).tickFormat((i) => labels[i] || ''));
+
+    xAxis.selectAll('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('text-anchor', 'end')
+      .attr('dx', '-0.6em')
+      .attr('dy', '-0.4em')
+      .style('font-size', '11px')
+      .style('font-weight', '700')
+      .style('fill', '#333');
+
+    xAxis.select('.domain').attr('stroke', '#bbb');
+    xAxis.selectAll('.tick line').attr('stroke', '#bbb');
+
+    // Y Left Axis
+    const yAxisLeft = g.append('g').call(d3.axisLeft(yLeft).ticks(8));
+    yAxisLeft.select('.domain').attr('stroke', '#bbb');
+    yAxisLeft.selectAll('.tick text').style('font-size', '11px').style('fill', '#444');
+    yAxisLeft.selectAll('.tick line').attr('stroke', '#bbb');
+
+    g.append('text')
+      .attr('transform', 'rotate(-90)')
+      .attr('x', -innerH / 2)
+      .attr('y', -32)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '13px')
+      .style('font-weight', '600')
+      .style('fill', '#333')
+      .text(leftAxisTitle);
+
+    // Y Right Axis
+    const yAxisRight = g.append('g')
+      .attr('transform', `translate(${innerW},0)`)
+      .call(d3.axisRight(yRight).ticks(8).tickFormat((v) => `$${v}`));
+
+    yAxisRight.select('.domain').attr('stroke', '#bbb');
+    yAxisRight.selectAll('.tick text').style('font-size', '11px').style('fill', '#444');
+    yAxisRight.selectAll('.tick line').attr('stroke', '#bbb');
+
+    g.append('text')
+      .attr('transform', 'rotate(90)')
+      .attr('x', innerH / 2)
+      .attr('y', -innerW - 54)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '13px')
+      .style('font-weight', '600')
+      .style('fill', '#333')
+      .text('Stock Price ($)');
+
+    // Title
+    svg.append('text')
+      .attr('x', width / 2)
+      .attr('y', 28)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '20px')
+      .style('font-weight', 'bold')
+      .style('fill', '#111')
+      .text(`${ticker} — ${activeTab === 'cash' ? 'Revenue, Cash Flow & Stock Price' : 'Margins, P/E & Stock Price'}`);
+
+    // Legend
+    const allItems = [...currentMetrics, { key: 'stock', label: 'Stock Price', color: '#000' }];
+    const legendG = svg.append('g').attr('transform', `translate(${margin.left + 10}, ${margin.top - 14})`);
+    let lx = 0;
+
+    for (const item of allItems) {
+      const isHidden = hidden.has(item.key);
+      const itemG = legendG.append('g')
+        .attr('transform', `translate(${lx}, 0)`)
+        .style('cursor', 'pointer')
+        .style('opacity', isHidden ? 0.3 : 1)
+        .on('click', () => {
+          setHidden((prev) => {
+            const next = new Set(prev);
+            if (next.has(item.key)) next.delete(item.key);
+            else next.add(item.key);
+            return next;
+          });
+        });
+
+      if (item.key === 'stock' || item.type === 'line') {
+        itemG.append('line')
+          .attr('x1', 0).attr('y1', 6).attr('x2', 18).attr('y2', 6)
+          .attr('stroke', item.color)
+          .attr('stroke-width', 2.5);
+      } else {
+        itemG.append('rect')
+          .attr('width', 16).attr('height', 12)
+          .attr('fill', item.color)
+          .attr('opacity', 0.9)
+          .attr('rx', 2);
+      }
+
+      const textEl = itemG.append('text')
+        .attr('x', 22)
+        .attr('y', 11)
+        .style('font-size', '13px')
+        .style('font-weight', '600')
+        .style('fill', '#333')
+        .text(item.label);
+
+      lx += textEl.node().getComputedTextLength() + 36;
+    }
+
+    // Tooltip Overlay
+    const tooltip = d3.select(tooltipRef.current);
+    const bisect = d3.bisector((d) => d.x).left;
+
+    g.append('rect')
+      .attr('width', innerW)
+      .attr('height', innerH)
+      .attr('fill', 'transparent')
+      .style('cursor', 'crosshair')
+      .on('mousemove', (event) => {
+        const [mx] = d3.pointer(event);
+        const xVal = xLin.invert(mx);
+        const qi = Math.round(xVal);
+
+        if (qi < 0 || qi >= numQ) {
+          tooltip.style('opacity', 0);
+          return;
+        }
+
+        const q = quarters[qi];
+        const si = bisect(stockPrices, xVal);
+        const sp = stockPrices[Math.min(si, stockPrices.length - 1)];
+
+        let rows = `<div style="font-weight:700;margin-bottom:6px;border-bottom:1px solid #444;padding-bottom:4px">${q.date}</div>`;
+        
+        const fmt = (v) => (v !== null && v !== undefined && !isNaN(v)) ? Number(v).toFixed(1) : '0.0';
+
+        if (activeTab === 'cash') {
+          if (!hidden.has('revenue'))      rows += `<div style="color:rgb(31,119,180)">Revenue: $${fmt(q.revenue)}${unitSuffix}</div>`;
+          if (!hidden.has('netIncome'))    rows += `<div style="color:rgb(152,223,138)">Net Income: $${fmt(q.netIncome)}${unitSuffix}</div>`;
+          if (!hidden.has('freeCashFlow')) {
+            const conv = (q.netIncome && q.netIncome > 0) ? ` <span style="font-size:11px;opacity:0.85">(${((q.freeCashFlow / q.netIncome) * 100).toFixed(0)}% of Net Inc)</span>` : '';
+            rows += `<div style="color:rgb(44,160,44)">Free Cash Flow: $${fmt(q.freeCashFlow)}${unitSuffix}${conv}</div>`;
+          }
+        } else {
+          if (!hidden.has('grossMarginPct'))     rows += `<div style="color:rgb(31,119,180)">Gross Margin: ${fmt(q.grossMarginPct)}%</div>`;
+          if (!hidden.has('operatingMarginPct')) rows += `<div style="color:rgb(255,127,14)">Operating Margin: ${fmt(q.operatingMarginPct)}%</div>`;
+          if (!hidden.has('netMarginPct'))       rows += `<div style="color:rgb(44,160,44)">Net Margin: ${fmt(q.netMarginPct)}%</div>`;
+          if (!hidden.has('peRatio'))            rows += `<div style="color:rgb(148,103,189)">P/E Ratio: ${q.peRatio ? fmt(q.peRatio) + 'x' : 'N/A'}</div>`;
+        }
+
+        if (!hidden.has('stock')) {
+          rows += `<div style="margin-top:4px;border-top:1px solid #444;padding-top:4px">Stock: $${sp ? sp.y.toFixed(2) : '—'}</div>`;
+        }
+
+        tooltip
+          .style('opacity', 1)
+          .style('left', `${event.pageX + 14}px`)
+          .style('top', `${event.pageY - 10}px`)
+          .html(rows);
+      })
+      .on('mouseleave', () => {
+        tooltip.style('opacity', 0);
+      });
+
+  }, [data, dimensions, hidden, activeTab]);
+
+  const kpis = data?.kpis || {};
+
+  return (
+    <div ref={containerRef} style={{ width: '100%' }}>
+      {/* KPI Cards Header */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        <div style={cardStyle}>
+          <div style={cardLabelStyle}>Stock Price</div>
+          <div style={cardValueStyle}>${kpis.latestPrice || '—'}</div>
+        </div>
+        <div style={cardStyle}>
+          <div style={cardLabelStyle}>TTM Revenue</div>
+          <div style={cardValueStyle}>${kpis.ttmRevenue || '—'}{kpis.unitSuffix}</div>
+        </div>
+        <div style={cardStyle}>
+          <div style={cardLabelStyle}>TTM Free Cash Flow</div>
+          <div style={cardValueStyle}>${kpis.ttmFreeCashFlow || '—'}{kpis.unitSuffix}</div>
+        </div>
+        <div style={cardStyle}>
+          <div style={cardLabelStyle}>TTM Net Margin</div>
+          <div style={cardValueStyle}>{kpis.ttmNetMargin ? `${kpis.ttmNetMargin}%` : '—'}</div>
+        </div>
+        <div style={cardStyle}>
+          <div style={cardLabelStyle}>TTM P/E Ratio</div>
+          <div style={cardValueStyle}>{kpis.ttmPE ? `${kpis.ttmPE}x` : '—'}</div>
+        </div>
+      </div>
+
+      {/* View Mode Switcher Tabs */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+        <button
+          onClick={() => setActiveTab('cash')}
+          style={{
+            ...tabButtonStyle,
+            background: activeTab === 'cash' ? '#1f77b4' : '#f0f0f0',
+            color: activeTab === 'cash' ? '#fff' : '#444',
+            fontWeight: activeTab === 'cash' ? '700' : '500',
+          }}
+        >
+          📊 Cash & Earnings (Revenue, FCF, Net Income)
+        </button>
+        <button
+          onClick={() => setActiveTab('margins')}
+          style={{
+            ...tabButtonStyle,
+            background: activeTab === 'margins' ? '#1f77b4' : '#f0f0f0',
+            color: activeTab === 'margins' ? '#fff' : '#444',
+            fontWeight: activeTab === 'margins' ? '700' : '500',
+          }}
+        >
+          📈 Margins & Fundamentals (Margins %, P/E Ratio)
+        </button>
+      </div>
+
+      <svg ref={svgRef} />
+      <div
+        ref={tooltipRef}
+        style={{
+          position: 'fixed',
+          opacity: 0,
+          background: 'rgba(10,10,10,0.92)',
+          color: '#eee',
+          padding: '10px 14px',
+          borderRadius: 6,
+          fontSize: 13,
+          lineHeight: 1.6,
+          pointerEvents: 'none',
+          zIndex: 1000,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        }}
+      />
+    </div>
+  );
+}
+
+const cardStyle = {
+  background: '#f8f9fa',
+  border: '1px solid #e2e8f0',
+  borderRadius: 8,
+  padding: '10px 14px',
+};
+
+const cardLabelStyle = {
+  fontSize: 11,
+  fontWeight: '600',
+  color: '#64748b',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  marginBottom: 4,
+};
+
+const cardValueStyle = {
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#0f172a',
+};
+
+const tabButtonStyle = {
+  fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+  fontSize: 13,
+  padding: '8px 18px',
+  borderRadius: 6,
+  border: '1px solid #ccc',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+};
+

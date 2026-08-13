@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.pyc
+.vite/
+dist/
+cache/
+*.db
+.env
+.DS_Store
+scratch/
+verify_all_playwright.js
+test_all_tickers.py
+.playwright-mcp/
