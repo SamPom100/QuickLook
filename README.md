@@ -2,17 +2,30 @@
 
 A fast, interactive stock & financial performance dashboard built with **React**, **D3.js**, **Python (Flask)**, and **Alpha Vantage**.
 
-![MSFT Financial Dashboard](docs/msft_dashboard.png)
+---
+
+## 📸 Dashboard Views
+
+### 1. 📊 Cash & Earnings (Revenue, FCF, Net Income vs Stock Price)
+Dual-pane visualization comparing quarterly Revenue, Net Income, Free Cash Flow, and 10-year stock price history.
+![Tab 1 - Cash & Earnings](docs/tab1_cash_earnings.png)
+
+### 2. 📈 Valuation History (P/E, P/S, FCF Yield & Stock Price)
+Historical P/E Ratio, P/S Ratio, and Free Cash Flow Yield tracking over time alongside share prices.
+![Tab 2 - Valuation History](docs/tab2_valuation_history.png)
+
+### 3. 🚀 Relative Growth (% Return since Start)
+Rebased percentage growth curves starting at `0% Baseline` to compare fundamental performance directly against share price returns.
+![Tab 3 - Relative Growth](docs/tab3_relative_growth.png)
 
 ---
 
 ## 🌟 Key Features
 
-* 📊 **Financial Performance & Stock Return (Tab 1):** Dual-pane interactive visualization comparing quarterly Revenue, Net Income, Free Cash Flow, and 10-year stock price history.
-* 📈 **Valuation History (Tab 2):** Historical P/E Ratio, P/S Ratio, and Free Cash Flow Yield tracking over time.
-* 🚀 **Relative Growth % Return (Tab 3):** Rebased percentage growth curves starting at `0% Baseline` to compare fundamental performance directly against share price returns.
-* 🏷️ **Interactive Competitor Benchmarks:** Clickable peer ticker pills (e.g. `AAPL`, `GOOGL`, `AMZN`, `ORCL`, `WMT`) to compare valuations and load peer dashboards instantly.
-* ⚡ **Optimized Parallel Data Engine:** Concurrent API fetching (`ThreadPoolExecutor`) and disk caching (`financial_cache.db`) for rapid loading.
+* 📊 **Multi-Tab Visualization:** Instantly toggle between Cash & Earnings, Valuation History, and Relative Growth Return.
+* 🏷️ **Interactive Competitor Benchmarks:** Clickable peer ticker pills (e.g. `AAPL`, `GOOGL`, `AMZN`, `ORCL`) to compare P/E ratios and switch target companies instantly.
+* 🎯 **Dynamic Tooltips & Guidelines:** High-precision crosshairs, explicit zero baselines, and complete dollar/percentage breakdowns on hover.
+* ⚡ **Optimized Parallel Data Engine:** Concurrent API fetching (`ThreadPoolExecutor`) and disk caching (`financial_cache.db`) for sub-second reloads.
 
 ---
 
