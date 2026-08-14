@@ -223,18 +223,7 @@ def get_data(ticker):
     })
 
 
-PEERS = {
-    'MSFT': ['AAPL', 'GOOGL', 'AMZN', 'ORCL'],
-    'AAPL': ['MSFT', 'GOOGL', 'AMZN'],
-    'NVDA': ['AMD', 'INTC', 'AVGO'],
-    'AMZN': ['MSFT', 'GOOGL', 'WMT'],
-    'GOOGL': ['META', 'MSFT', 'AMZN'],
-    'META': ['GOOGL', 'SNAP', 'MSFT'],
-    'TSLA': ['RIVN', 'GM', 'F'],
-    'AMD': ['NVDA', 'INTC', 'AVGO'],
-    'IBM': ['ACN', 'ORCL', 'SAP'],
-    'INTC': ['AMD', 'NVDA', 'TSM'],
-}
+from data.peer_service import FinnhubPeerService
 
 
 def fetch_single_peer(p_sym: str) -> dict:
@@ -274,7 +263,8 @@ def fetch_single_peer(p_sym: str) -> dict:
         }
 
 def get_peer_comparison(ticker: str) -> list:
-    peer_symbols = PEERS.get(ticker.upper(), ['MSFT', 'AAPL', 'GOOGL'])
+    # Dynamically discover direct competitor peers via Finnhub API
+    peer_symbols = FinnhubPeerService.get_dynamic_peers(ticker, cm)
     with ThreadPoolExecutor(max_workers=len(peer_symbols)) as executor:
         results = list(executor.map(fetch_single_peer, peer_symbols))
     return results
