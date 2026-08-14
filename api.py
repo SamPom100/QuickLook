@@ -49,6 +49,8 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
         return 1e9
 
 
+from concurrent.futures import ThreadPoolExecutor
+
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
     ticker = ticker.upper()
@@ -56,17 +58,20 @@ def get_data(ticker):
     analysis = None
     val_df = None
     
-    # Retry up to 2 times for rate-limited API calls
+    # Run financial statement analysis and price valuation history concurrently in parallel
     for attempt in range(2):
         try:
-            analysis = service.get_financial_analysis(ticker, period="quarterly")
-            val_df = service.get_valuation_history(ticker, period="10y")
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_analysis = executor.submit(service.get_financial_analysis, ticker, "quarterly")
+                f_val = executor.submit(service.get_valuation_history, ticker, "10y")
+                analysis = f_analysis.result()
+                val_df = f_val.result()
             if analysis and len(analysis) > 0:
                 break
         except Exception as e:
             if attempt == 1:
                 return jsonify({"error": str(e)}), 500
-        time.sleep(1.5)
+        time.sleep(0.5)
 
     if not analysis or len(analysis) == 0:
         return jsonify({"error": f"Alpha Vantage rate limit reached or no financial data for {ticker}. Please retry in 15 seconds."}), 429
@@ -232,36 +237,46 @@ PEERS = {
 }
 
 
-def get_peer_comparison(ticker: str) -> list:
-    peer_symbols = PEERS.get(ticker.upper(), ['MSFT', 'AAPL', 'GOOGL'])
-    results = []
-    for p_sym in peer_symbols:
-        try:
-            p_price = 0.0
-            val_df = service.get_valuation_history(p_sym, period="1mo")
-            if val_df is not None and not val_df.empty:
-                p_price = float(val_df["Close"].iloc[-1])
-            
-            p_pe = "N/A"
-            url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym.upper()}&apikey=YOUR_ALPHA_KEY_0'
-            cached = cm.get_url_cache(url)
-            if cached:
-                overview = json.loads(cached) if isinstance(cached, str) else cached
+def fetch_single_peer(p_sym: str) -> dict:
+    try:
+        p_price = 0.0
+        val_df = service.provider.get_price_history(p_sym, period="1mo")
+        if val_df is not None and not val_df.empty:
+            p_price = float(val_df["Close"].iloc[-1])
+        
+        p_pe = "N/A"
+        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym.upper()}&apikey=YOUR_ALPHA_KEY_0'
+        cached = cm.get_url_cache(url)
+        if cached:
+            overview = json.loads(cached) if isinstance(cached, str) else cached
+            pe_val = overview.get('PERatio')
+            if pe_val and pe_val != 'None' and pe_val != 'N/A':
+                p_pe = round(float(pe_val), 2)
+        else:
+            resp = requests.get(url, timeout=5)
+            overview = resp.json()
+            if isinstance(overview, dict) and "PERatio" in overview:
+                cm.save_url_cache(url, json.dumps(overview))
                 pe_val = overview.get('PERatio')
                 if pe_val and pe_val != 'None' and pe_val != 'N/A':
                     p_pe = round(float(pe_val), 2)
-            
-            results.append({
-                "ticker": p_sym,
-                "price": round(p_price, 2) if p_price > 0 else "—",
-                "peRatio": p_pe
-            })
-        except Exception:
-            results.append({
-                "ticker": p_sym,
-                "price": "—",
-                "peRatio": "N/A"
-            })
+
+        return {
+            "ticker": p_sym,
+            "price": round(p_price, 2) if p_price > 0 else "—",
+            "peRatio": p_pe
+        }
+    except Exception:
+        return {
+            "ticker": p_sym,
+            "price": "—",
+            "peRatio": "N/A"
+        }
+
+def get_peer_comparison(ticker: str) -> list:
+    peer_symbols = PEERS.get(ticker.upper(), ['MSFT', 'AAPL', 'GOOGL'])
+    with ThreadPoolExecutor(max_workers=len(peer_symbols)) as executor:
+        results = list(executor.map(fetch_single_peer, peer_symbols))
     return results
 
 

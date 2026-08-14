@@ -49,22 +49,43 @@ class FinancialDataProvider:
         if cached_info:
             return CompanyOverview(**cached_info)
 
-        yf_ticker = yf.Ticker(ticker)
-        info = yf_ticker.info or {}
+        url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker.upper()}&apikey={self.api_key}"
+        data = self._fetch_url(url)
+        if data and isinstance(data, dict) and "Name" in data:
+            def safe_float(v):
+                try: return float(v) if v and v != "None" else None
+                except: return None
+            overview = CompanyOverview(
+                ticker=ticker.upper(),
+                name=data.get("Name") or ticker.upper(),
+                sector=data.get("Sector"),
+                industry=data.get("Industry"),
+                market_cap=safe_float(data.get("MarketCapitalization")),
+                shares_outstanding=safe_float(data.get("SharesOutstanding")),
+                currency=data.get("Currency", "USD"),
+                summary=data.get("Description"),
+            )
+            self.cache.save_company_info(ticker, overview.model_dump())
+            return overview
 
-        overview = CompanyOverview(
-            ticker=ticker.upper(),
-            name=info.get("longName") or info.get("shortName") or ticker.upper(),
-            sector=info.get("sector"),
-            industry=info.get("industry"),
-            market_cap=info.get("marketCap"),
-            shares_outstanding=info.get("sharesOutstanding"),
-            currency=info.get("currency", "USD"),
-            summary=info.get("longBusinessSummary"),
-        )
-
-        self.cache.save_company_info(ticker, overview.model_dump())
-        return overview
+        # Fallback to yfinance if Alpha Vantage overview is rate limited
+        try:
+            yf_ticker = yf.Ticker(ticker)
+            info = yf_ticker.info or {}
+            overview = CompanyOverview(
+                ticker=ticker.upper(),
+                name=info.get("longName") or info.get("shortName") or ticker.upper(),
+                sector=info.get("sector"),
+                industry=info.get("industry"),
+                market_cap=info.get("marketCap"),
+                shares_outstanding=info.get("sharesOutstanding"),
+                currency=info.get("currency", "USD"),
+                summary=info.get("longBusinessSummary"),
+            )
+            self.cache.save_company_info(ticker, overview.model_dump())
+            return overview
+        except Exception:
+            return CompanyOverview(ticker=ticker.upper(), name=ticker.upper())
 
     def get_financial_statements(
         self, ticker: str, period: str = "quarterly"
@@ -74,15 +95,20 @@ class FinancialDataProvider:
             return [FinancialStatement(**s) for s in cached_stmt]
 
         try:
-            # 1. Fetch Standardized Quarterly Income Statement
-            inc_url = f"https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol={ticker.upper()}&apikey={self.api_key}"
-            inc_data = self._fetch_url(inc_url)
-            inc_reports = inc_data.get("quarterlyReports", [])
+            from concurrent.futures import ThreadPoolExecutor
 
-            # 2. Fetch Standardized Quarterly Cash Flow Statement
+            inc_url = f"https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol={ticker.upper()}&apikey={self.api_key}"
             cf_url = f"https://www.alphavantage.co/query?function=CASH_FLOW&symbol={ticker.upper()}&apikey={self.api_key}"
-            cf_data = self._fetch_url(cf_url)
-            cf_reports = cf_data.get("quarterlyReports", [])
+
+            # Fetch Income Statement and Cash Flow in parallel!
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f_inc = executor.submit(self._fetch_url, inc_url)
+                f_cf = executor.submit(self._fetch_url, cf_url)
+                inc_data = f_inc.result()
+                cf_data = f_cf.result()
+
+            inc_reports = inc_data.get("quarterlyReports", []) if isinstance(inc_data, dict) else []
+            cf_reports = cf_data.get("quarterlyReports", []) if isinstance(cf_data, dict) else []
 
             cf_map = {
                 r.get("fiscalDateEnding"): r for r in cf_reports if r.get("fiscalDateEnding")
