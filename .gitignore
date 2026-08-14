@@ -1,6 +1,8 @@
 node_modules/
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/
 .vite/
 dist/
 .env
@@ -9,3 +11,4 @@ scratch/
 verify_all_playwright.js
 test_all_tickers.py
 .playwright-mcp/
+
