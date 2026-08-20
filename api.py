@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from flask import Flask, jsonify
 from flask_cors import CORS
+from concurrent.futures import ThreadPoolExecutor
 from data.data_service import FinancialDataService
 from data.cache_manager import CacheManager
 
@@ -70,7 +71,78 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
         return 1e9
 
 
-from concurrent.futures import ThreadPoolExecutor
+from data.peer_service import FinnhubPeerService
+
+
+def fetch_single_peer(p_sym: str) -> dict:
+    try:
+        p_sym_upper = p_sym.upper()
+        p_price = 0.0
+        val_df = service.provider.get_price_history(p_sym_upper, period="1mo")
+        if val_df is not None and not val_df.empty:
+            p_price = float(val_df["Close"].iloc[-1])
+        
+        p_pe = "N/A"
+        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym_upper}&apikey=YOUR_ALPHA_KEY_0'
+        cached = cm.get_url_cache(url)
+        
+        if cached and isinstance(cached, dict) and ("PERatio" in cached or "peRatio" in cached):
+            print(f"  ⚡ [CACHE HIT] Alpha Vantage: Peer Overview ({p_sym_upper})")
+            pe_val = cached.get('PERatio') or cached.get('peRatio')
+            if pe_val and pe_val != 'None' and pe_val != 'N/A':
+                p_pe = round(float(pe_val), 2)
+        else:
+            # 1. Try Alpha Vantage live call first
+            got_pe = False
+            try:
+                print(f"  🌐 [LIVE API CALL] Alpha Vantage: Peer Overview ({p_sym_upper})")
+                resp = requests.get(url, timeout=4)
+                overview = resp.json()
+                if isinstance(overview, dict) and "PERatio" in overview:
+                    pe_val = overview.get('PERatio')
+                    if pe_val and pe_val != 'None' and pe_val != 'N/A':
+                        p_pe = round(float(pe_val), 2)
+                        got_pe = True
+                    cm.save_url_cache(url, overview)
+                    print(f"  💾 [CACHE SAVED] Alpha Vantage: Peer Overview ({p_sym_upper})")
+            except Exception:
+                pass
+
+            # 2. Fallback to Yahoo Finance if Alpha Vantage was rate-limited / unavailable
+            if not got_pe:
+                try:
+                    print(f"  🌐 [LIVE API CALL] Yahoo Finance: Peer Info ({p_sym_upper})")
+                    yf_t = yf.Ticker(p_sym_upper)
+                    yf_info = yf_t.info or {}
+                    trailing_pe = yf_info.get("trailingPE") or yf_info.get("forwardPE")
+                    if trailing_pe:
+                        p_pe = round(float(trailing_pe), 2)
+                    # Cache the found PE to SQLite so it never fetches again
+                    cm.save_url_cache(url, {"PERatio": str(p_pe), "Symbol": p_sym_upper})
+                    print(f"  💾 [CACHE SAVED] Peer Overview ({p_sym_upper})")
+                except Exception:
+                    # Still cache the N/A to prevent repeated rate limit spam
+                    cm.save_url_cache(url, {"PERatio": "N/A", "Symbol": p_sym_upper})
+
+        return {
+            "ticker": p_sym_upper,
+            "price": round(p_price, 2) if p_price > 0 else "—",
+            "peRatio": p_pe
+        }
+    except Exception:
+        return {
+            "ticker": p_sym,
+            "price": "—",
+            "peRatio": "N/A"
+        }
+
+def get_peer_comparison(ticker: str) -> list:
+    # Dynamically discover direct competitor peers via Finnhub API
+    peer_symbols = FinnhubPeerService.get_dynamic_peers(ticker, cm)
+    with ThreadPoolExecutor(max_workers=len(peer_symbols)) as executor:
+        results = list(executor.map(fetch_single_peer, peer_symbols))
+    return results
+
 
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
@@ -79,15 +151,18 @@ def get_data(ticker):
 
     analysis = None
     val_df = None
+    peers_data = []
     
-    # Run financial statement analysis and price valuation history concurrently in parallel
+    # Run financial statement analysis, price valuation history, and peer comparison all concurrently in parallel
     for attempt in range(2):
         try:
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=3) as executor:
                 f_analysis = executor.submit(service.get_financial_analysis, ticker, "quarterly")
                 f_val = executor.submit(service.get_valuation_history, ticker, "10y")
+                f_peers = executor.submit(get_peer_comparison, ticker)
                 analysis = f_analysis.result()
                 val_df = f_val.result()
+                peers_data = f_peers.result()
             if analysis and len(analysis) > 0:
                 break
         except Exception as e:
@@ -237,8 +312,6 @@ def get_data(ticker):
         "unitSuffix": unit_suffix,
     }
 
-    peers_data = get_peer_comparison(ticker)
-
     was_throttled = getattr(service.provider, "was_throttled", False)
     if hasattr(service.provider, "was_throttled"):
         service.provider.was_throttled = False
@@ -256,78 +329,6 @@ def get_data(ticker):
     })
 
 
-from data.peer_service import FinnhubPeerService
-
-
-def fetch_single_peer(p_sym: str) -> dict:
-    try:
-        p_sym_upper = p_sym.upper()
-        p_price = 0.0
-        val_df = service.provider.get_price_history(p_sym_upper, period="1mo")
-        if val_df is not None and not val_df.empty:
-            p_price = float(val_df["Close"].iloc[-1])
-        
-        p_pe = "N/A"
-        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym_upper}&apikey=YOUR_ALPHA_KEY_0'
-        cached = cm.get_url_cache(url)
-        
-        if cached and isinstance(cached, dict) and ("PERatio" in cached or "peRatio" in cached):
-            print(f"  ⚡ [CACHE HIT] Alpha Vantage: Peer Overview ({p_sym_upper})")
-            pe_val = cached.get('PERatio') or cached.get('peRatio')
-            if pe_val and pe_val != 'None' and pe_val != 'N/A':
-                p_pe = round(float(pe_val), 2)
-        else:
-            # 1. Try Alpha Vantage live call first
-            got_pe = False
-            try:
-                print(f"  🌐 [LIVE API CALL] Alpha Vantage: Peer Overview ({p_sym_upper})")
-                resp = requests.get(url, timeout=4)
-                overview = resp.json()
-                if isinstance(overview, dict) and "PERatio" in overview:
-                    pe_val = overview.get('PERatio')
-                    if pe_val and pe_val != 'None' and pe_val != 'N/A':
-                        p_pe = round(float(pe_val), 2)
-                        got_pe = True
-                    cm.save_url_cache(url, overview)
-                    print(f"  💾 [CACHE SAVED] Alpha Vantage: Peer Overview ({p_sym_upper})")
-            except Exception:
-                pass
-
-            # 2. Fallback to Yahoo Finance if Alpha Vantage was rate-limited / unavailable
-            if not got_pe:
-                try:
-                    print(f"  🌐 [LIVE API CALL] Yahoo Finance: Peer Info ({p_sym_upper})")
-                    yf_t = yf.Ticker(p_sym_upper)
-                    yf_info = yf_t.info or {}
-                    trailing_pe = yf_info.get("trailingPE") or yf_info.get("forwardPE")
-                    if trailing_pe:
-                        p_pe = round(float(trailing_pe), 2)
-                    # Cache the found PE to SQLite so it never fetches again
-                    cm.save_url_cache(url, {"PERatio": str(p_pe), "Symbol": p_sym_upper})
-                    print(f"  💾 [CACHE SAVED] Peer Overview ({p_sym_upper})")
-                except Exception:
-                    # Still cache the N/A to prevent repeated rate limit spam
-                    cm.save_url_cache(url, {"PERatio": "N/A", "Symbol": p_sym_upper})
-
-        return {
-            "ticker": p_sym_upper,
-            "price": round(p_price, 2) if p_price > 0 else "—",
-            "peRatio": p_pe
-        }
-    except Exception:
-        return {
-            "ticker": p_sym,
-            "price": "—",
-            "peRatio": "N/A"
-        }
-
-def get_peer_comparison(ticker: str) -> list:
-    # Dynamically discover direct competitor peers via Finnhub API
-    peer_symbols = FinnhubPeerService.get_dynamic_peers(ticker, cm)
-    with ThreadPoolExecutor(max_workers=len(peer_symbols)) as executor:
-        results = list(executor.map(fetch_single_peer, peer_symbols))
-    return results
-
-
 if __name__ == "__main__":
     app.run(port=5001, debug=False)
+
