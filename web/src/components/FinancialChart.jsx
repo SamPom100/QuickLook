@@ -7,16 +7,38 @@ const CASH_METRICS = [
   { key: 'freeCashFlow', label: 'Free Cash Flow', color: 'rgb(44, 160, 44)',   widthFrac: 0.64, type: 'bar' },
 ];
 
+const CASH_LEGEND_ITEMS = [
+  { key: 'revenue',      label: 'Revenue',                   color: 'rgb(31, 119, 180)',  type: 'bar' },
+  { key: 'netIncome',    label: 'Net Income',                color: 'rgb(152, 223, 138)', type: 'bar' },
+  { key: 'freeCashFlow', label: 'Free Cash Flow',            color: 'rgb(44, 160, 44)',   type: 'bar' },
+  { key: 'yoyGrowth',    label: 'Cum. Rev Growth (Dotted)',  color: '#d97706',            type: 'dotted' },
+  { key: 'stock',        label: 'Stock Price ($)',           color: '#000',               type: 'line' },
+];
+
 const VALUATION_METRICS = [
   { key: 'peRatio',   label: 'P/E Ratio (TTM)',     color: 'rgb(148, 103, 189)', type: 'line' },
   { key: 'psRatio',   label: 'P/S Ratio (TTM)',     color: 'rgb(31, 119, 180)',  type: 'line' },
   { key: 'fcfYield',  label: 'FCF Yield % (TTM)',   color: 'rgb(44, 160, 44)',   type: 'line' },
 ];
 
+const VALUATION_LEGEND_ITEMS = [
+  { key: 'peRatio',   label: 'P/E Ratio (TTM)',     color: 'rgb(148, 103, 189)', type: 'line' },
+  { key: 'psRatio',   label: 'P/S Ratio (TTM)',     color: 'rgb(31, 119, 180)',  type: 'line' },
+  { key: 'fcfYield',  label: 'FCF Yield % (TTM)',   color: 'rgb(44, 160, 44)',   type: 'line' },
+  { key: 'stock',     label: 'Stock Price ($)',     color: '#000',               type: 'line' },
+];
+
 const INDEX_METRICS = [
   { key: 'revenueIdx',      label: 'Revenue Growth (%)',        color: 'rgb(31, 119, 180)',  type: 'line' },
   { key: 'netIncomeIdx',    label: 'Net Income Growth (%)',     color: 'rgb(152, 223, 138)', type: 'line' },
   { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth (%)', color: 'rgb(44, 160, 44)',   type: 'line' },
+];
+
+const INDEX_LEGEND_ITEMS = [
+  { key: 'revenueIdx',      label: 'Revenue Growth (%)',        color: 'rgb(31, 119, 180)',  type: 'line' },
+  { key: 'netIncomeIdx',    label: 'Net Income Growth (%)',     color: 'rgb(152, 223, 138)', type: 'line' },
+  { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth (%)', color: 'rgb(44, 160, 44)',   type: 'line' },
+  { key: 'stock',           label: 'Stock Return (%)',          color: '#000',               type: 'line' },
 ];
 
 export default function FinancialChart({ data, onSelectTicker }) {
@@ -27,6 +49,20 @@ export default function FinancialChart({ data, onSelectTicker }) {
   const [activeTab, setActiveTab] = useState('cash'); // 'cash', 'margins', or 'growth'
   const [dimensions, setDimensions] = useState({ width: 1400, height: 750 });
   const [hidden, setHidden] = useState(new Set());
+
+  const toggleSeries = (key) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  let currentLegendItems;
+  if (activeTab === 'cash') currentLegendItems = CASH_LEGEND_ITEMS;
+  else if (activeTab === 'valuation') currentLegendItems = VALUATION_LEGEND_ITEMS;
+  else currentLegendItems = INDEX_LEGEND_ITEMS;
 
   // Responsive resize — fill viewport
   useEffect(() => {
@@ -812,6 +848,113 @@ export default function FinancialChart({ data, onSelectTicker }) {
         >
           🚀 Relative Growth (% Return)
         </button>
+      </div>
+
+      {/* Interactive Legend Toggle Toolbar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: 8,
+        padding: '8px 14px',
+        marginBottom: 12,
+      }}>
+        <span style={{
+          fontSize: 12,
+          fontWeight: '700',
+          color: '#475569',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          marginRight: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}>
+          👁️ Toggle Series:
+        </span>
+        {currentLegendItems.map((item) => {
+          const isHidden = hidden.has(item.key);
+          const borderColor = isHidden ? '#cbd5e1' : (item.color === '#000' ? '#334155' : item.color);
+          return (
+            <button
+              key={item.key}
+              onClick={() => toggleSeries(item.key)}
+              title={isHidden ? `Click to show ${item.label}` : `Click to hide ${item.label}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                background: isHidden ? '#f1f5f9' : '#fff',
+                border: `1.5px ${isHidden ? 'dashed' : 'solid'} ${borderColor}`,
+                borderRadius: 6,
+                padding: '4px 11px',
+                fontSize: 12,
+                fontWeight: isHidden ? '500' : '600',
+                color: isHidden ? '#94a3b8' : '#1e293b',
+                cursor: 'pointer',
+                opacity: isHidden ? 0.6 : 1,
+                textDecoration: isHidden ? 'line-through' : 'none',
+                transition: 'all 0.15s ease',
+                boxShadow: isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                outline: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)';
+              }}
+            >
+              {/* Swatch Icon */}
+              {item.type === 'bar' && (
+                <span style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 2,
+                  background: isHidden ? '#94a3b8' : item.color,
+                  display: 'inline-block',
+                }} />
+              )}
+              {item.type === 'dotted' && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}>
+                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                </span>
+              )}
+              {item.type === 'line' && (
+                <span style={{
+                  width: 14,
+                  height: 3,
+                  borderRadius: 1,
+                  background: isHidden ? '#94a3b8' : item.color,
+                  display: 'inline-block',
+                }} />
+              )}
+              <span>{item.label}</span>
+              {isHidden && (
+                <span style={{
+                  fontSize: 10,
+                  color: '#ef4444',
+                  fontWeight: '700',
+                  textDecoration: 'none',
+                  marginLeft: 2,
+                }}>
+                  (hidden)
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <svg ref={svgRef} />
