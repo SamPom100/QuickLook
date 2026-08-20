@@ -31,10 +31,12 @@ class FinnhubPeerService:
         if cache_manager:
             cached = cache_manager.get_url_cache(url)
             if cached:
+                print(f"  ⚡ [CACHE HIT] Finnhub: Competitor Peers ({ticker_upper})")
                 raw_peers = json.loads(cached) if isinstance(cached, str) else cached
 
         # 2. Live Finnhub API Fetch if not in cache
         if not raw_peers:
+            print(f"  🌐 [LIVE API CALL] Finnhub: Competitor Peers ({ticker_upper})")
             try:
                 resp = requests.get(url, timeout=5)
                 if resp.status_code == 200:
@@ -42,8 +44,9 @@ class FinnhubPeerService:
                     if isinstance(raw_peers, list) and len(raw_peers) > 0:
                         if cache_manager:
                             cache_manager.save_url_cache(url, json.dumps(raw_peers))
+                            print(f"  💾 [CACHE SAVED] Finnhub: Competitor Peers ({ticker_upper})")
             except Exception as e:
-                print(f"Finnhub Peer Fetch Warning for {ticker_upper}: {e}")
+                print(f"  ⚠️ [API ERROR] Finnhub Peer Fetch for {ticker_upper}: {e}")
 
         # 3. Clean and filter peer symbols
         filtered_peers = []

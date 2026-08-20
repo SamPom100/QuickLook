@@ -1,12 +1,18 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
-import pandas as pd
-import numpy as np
+import sys
+import os
 import json
 import time
 import requests
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from flask import Flask, jsonify
+from flask_cors import CORS
 from data.data_service import FinancialDataService
 from data.cache_manager import CacheManager
+
+# Ensure immediate unbuffered terminal output
+sys.stdout.reconfigure(line_buffering=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -17,15 +23,30 @@ cm = CacheManager()
 
 def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
     try:
+        # Check company_info cache first (populated during valuation history / overview fetch)
+        c_info = cm.get_company_info(ticker)
+        if c_info and c_info.get("shares_outstanding"):
+            shares = float(c_info["shares_outstanding"])
+            mc = float(c_info.get("market_cap") or 0.0)
+            if mc > 0 and latest_price > 0:
+                implied_shares = mc / latest_price
+                if implied_shares > shares * 1.2:
+                    return implied_shares
+            if shares > 0:
+                return shares
+
         url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker.upper()}&apikey=YOUR_ALPHA_KEY_0'
         cached = cm.get_url_cache(url)
-        if cached:
-            overview = json.loads(cached) if isinstance(cached, str) else cached
+        if cached and isinstance(cached, dict) and "MarketCapitalization" in cached:
+            print(f"  ⚡ [CACHE HIT] Alpha Vantage: Shares Outstanding / Overview ({ticker.upper()})")
+            overview = cached
         else:
+            print(f"  🌐 [LIVE API CALL] Alpha Vantage: Shares Outstanding / Overview ({ticker.upper()})")
             resp = requests.get(url, timeout=10)
             overview = resp.json()
             if isinstance(overview, dict) and "Information" not in overview and "Note" not in overview:
-                cm.save_url_cache(url, json.dumps(overview))
+                cm.save_url_cache(url, overview)
+                print(f"  💾 [CACHE SAVED] Alpha Vantage: Shares Outstanding / Overview ({ticker.upper()})")
         
         mc = float(overview.get('MarketCapitalization', 0)) if isinstance(overview, dict) else 0.0
         shares = float(overview.get('SharesOutstanding', 0)) if isinstance(overview, dict) else 0.0
@@ -54,6 +75,7 @@ from concurrent.futures import ThreadPoolExecutor
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
     ticker = ticker.upper()
+    print(f"\n📥 [API REQUEST] GET /api/data/{ticker}")
 
     analysis = None
     val_df = None
@@ -74,7 +96,12 @@ def get_data(ticker):
         time.sleep(0.5)
 
     if not analysis or len(analysis) == 0:
-        return jsonify({"error": f"Alpha Vantage rate limit reached or no financial data for {ticker}. Please retry in 15 seconds."}), 429
+        print(f"  ⏳ [THROTTLED] API returned 429 rate limit error for {ticker}")
+        return jsonify({
+            "error": f"Alpha Vantage free-tier rate limit reached (5 requests/minute). Please wait 15 seconds and click Retry.",
+            "isThrottled": True,
+            "retryAfter": 15
+        }), 429
 
     df = pd.DataFrame(analysis)
     df["dt"] = pd.to_datetime(df["period_end_date"]).dt.tz_localize(None)
@@ -212,6 +239,10 @@ def get_data(ticker):
 
     peers_data = get_peer_comparison(ticker)
 
+    was_throttled = getattr(service.provider, "was_throttled", False)
+    if hasattr(service.provider, "was_throttled"):
+        service.provider.was_throttled = False
+
     return jsonify({
         "ticker": ticker,
         "unitLabel": unit_label,
@@ -220,6 +251,8 @@ def get_data(ticker):
         "stockPrices": stock_prices,
         "kpis": kpis,
         "peers": peers_data,
+        "isThrottled": was_throttled,
+        "notice": "Alpha Vantage free-tier rate limit (5 calls/min) was active; fallback data sources were used." if was_throttled else None,
     })
 
 
@@ -228,30 +261,56 @@ from data.peer_service import FinnhubPeerService
 
 def fetch_single_peer(p_sym: str) -> dict:
     try:
+        p_sym_upper = p_sym.upper()
         p_price = 0.0
-        val_df = service.provider.get_price_history(p_sym, period="1mo")
+        val_df = service.provider.get_price_history(p_sym_upper, period="1mo")
         if val_df is not None and not val_df.empty:
             p_price = float(val_df["Close"].iloc[-1])
         
         p_pe = "N/A"
-        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym.upper()}&apikey=YOUR_ALPHA_KEY_0'
+        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym_upper}&apikey=YOUR_ALPHA_KEY_0'
         cached = cm.get_url_cache(url)
-        if cached:
-            overview = json.loads(cached) if isinstance(cached, str) else cached
-            pe_val = overview.get('PERatio')
+        
+        if cached and isinstance(cached, dict) and ("PERatio" in cached or "peRatio" in cached):
+            print(f"  ⚡ [CACHE HIT] Alpha Vantage: Peer Overview ({p_sym_upper})")
+            pe_val = cached.get('PERatio') or cached.get('peRatio')
             if pe_val and pe_val != 'None' and pe_val != 'N/A':
                 p_pe = round(float(pe_val), 2)
         else:
-            resp = requests.get(url, timeout=5)
-            overview = resp.json()
-            if isinstance(overview, dict) and "PERatio" in overview:
-                cm.save_url_cache(url, json.dumps(overview))
-                pe_val = overview.get('PERatio')
-                if pe_val and pe_val != 'None' and pe_val != 'N/A':
-                    p_pe = round(float(pe_val), 2)
+            # 1. Try Alpha Vantage live call first
+            got_pe = False
+            try:
+                print(f"  🌐 [LIVE API CALL] Alpha Vantage: Peer Overview ({p_sym_upper})")
+                resp = requests.get(url, timeout=4)
+                overview = resp.json()
+                if isinstance(overview, dict) and "PERatio" in overview:
+                    pe_val = overview.get('PERatio')
+                    if pe_val and pe_val != 'None' and pe_val != 'N/A':
+                        p_pe = round(float(pe_val), 2)
+                        got_pe = True
+                    cm.save_url_cache(url, overview)
+                    print(f"  💾 [CACHE SAVED] Alpha Vantage: Peer Overview ({p_sym_upper})")
+            except Exception:
+                pass
+
+            # 2. Fallback to Yahoo Finance if Alpha Vantage was rate-limited / unavailable
+            if not got_pe:
+                try:
+                    print(f"  🌐 [LIVE API CALL] Yahoo Finance: Peer Info ({p_sym_upper})")
+                    yf_t = yf.Ticker(p_sym_upper)
+                    yf_info = yf_t.info or {}
+                    trailing_pe = yf_info.get("trailingPE") or yf_info.get("forwardPE")
+                    if trailing_pe:
+                        p_pe = round(float(trailing_pe), 2)
+                    # Cache the found PE to SQLite so it never fetches again
+                    cm.save_url_cache(url, {"PERatio": str(p_pe), "Symbol": p_sym_upper})
+                    print(f"  💾 [CACHE SAVED] Peer Overview ({p_sym_upper})")
+                except Exception:
+                    # Still cache the N/A to prevent repeated rate limit spam
+                    cm.save_url_cache(url, {"PERatio": "N/A", "Symbol": p_sym_upper})
 
         return {
-            "ticker": p_sym,
+            "ticker": p_sym_upper,
             "price": round(p_price, 2) if p_price > 0 else "—",
             "peRatio": p_pe
         }

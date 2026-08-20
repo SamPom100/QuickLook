@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import sqlite3
 from typing import Optional, List, Dict, Any
@@ -67,7 +68,7 @@ class CacheManager:
             )
             conn.commit()
 
-    def get_url_cache(self, url: str) -> Optional[Dict[str, Any]]:
+    def get_url_cache(self, url: str) -> Optional[Any]:
         """Retrieve raw HTTP JSON response from cache."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -76,20 +77,37 @@ class CacheManager:
                 (url,),
             )
             row = cursor.fetchone()
-            if row:
-                return json.loads(row[0])
+            if row and row[0]:
+                try:
+                    data = json.loads(row[0])
+                    if isinstance(data, str):
+                        try:
+                            data = json.loads(data)
+                        except Exception:
+                            pass
+                    return data
+                except Exception:
+                    return row[0]
         return None
 
-    def save_url_cache(self, url: str, data: Dict[str, Any]):
+    def save_url_cache(self, url: str, data: Any):
         """Save raw HTTP JSON response to cache permanently."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            if isinstance(data, str):
+                try:
+                    json_obj = json.loads(data)
+                    json_str = json.dumps(json_obj)
+                except Exception:
+                    json_str = json.dumps(data)
+            else:
+                json_str = json.dumps(data)
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO raw_url_cache (url, json_data, updated_at)
                 VALUES (?, ?, ?)
                 """,
-                (url, json.dumps(data), datetime.now().isoformat()),
+                (url, json_str, datetime.now().isoformat()),
             )
             conn.commit()
 
@@ -177,7 +195,7 @@ class CacheManager:
                 updated_dt = datetime.fromisoformat(updated_at)
                 if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
                     try:
-                        return pd.read_json(json_data, orient="split")
+                        return pd.read_json(io.StringIO(json_data), orient="split")
                     except Exception:
                         return None
         return None

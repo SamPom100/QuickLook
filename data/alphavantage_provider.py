@@ -19,31 +19,39 @@ class AlphaVantageProvider(BaseDataProvider):
         self.api_key = api_key
         self.cache = cache_manager or CacheManager()
 
-    def _fetch_url(self, url: str) -> Dict[str, Any]:
+    def _fetch_url(self, url: str, label: str = "") -> Dict[str, Any]:
         """
         Fetch JSON from URL with 100% SQLite caching.
         If URL was fetched before, returns cached JSON instantly without network call.
         """
+        tag = label or url.split("&apikey=")[0]
         cached = self.cache.get_url_cache(url)
         if cached:
+            print(f"  ⚡ [CACHE HIT] {tag}")
             return cached
 
+        print(f"  🌐 [LIVE API CALL] {tag}")
         try:
             r = requests.get(url, timeout=10)
             data = r.json()
+            if isinstance(data, dict) and ("Information" in data or "Note" in data):
+                print(f"  ⏳ [THROTTLED] Alpha Vantage rate limit reached for {tag}")
             # Only cache valid responses (not rate-limit messages or errors)
-            if data and "Error Message" not in data and "Information" not in data:
+            if data and "Error Message" not in data and "Information" not in data and "Note" not in data:
                 self.cache.save_url_cache(url, data)
+                print(f"  💾 [CACHE SAVED] {tag}")
             return data
         except Exception as e:
-            print(f"AlphaVantage Fetch Warning for {url}: {e}")
+            print(f"  ⚠️ [API ERROR] AlphaVantage Fetch Warning for {tag}: {e}")
             return {}
 
     def get_company_overview(self, ticker: str) -> CompanyOverview:
         cached_info = self.cache.get_company_info(ticker)
         if cached_info:
+            print(f"  ⚡ [CACHE HIT] Company Overview ({ticker.upper()})")
             return CompanyOverview(**cached_info)
 
+        print(f"  🌐 [LIVE API CALL] Yahoo Finance: Company Info ({ticker.upper()})")
         yf_ticker = yf.Ticker(ticker)
         info = yf_ticker.info or {}
 
@@ -59,6 +67,7 @@ class AlphaVantageProvider(BaseDataProvider):
         )
 
         self.cache.save_company_info(ticker, overview.model_dump())
+        print(f"  💾 [CACHE SAVED] Company Overview ({ticker.upper()})")
         return overview
 
     def get_financial_statements(
@@ -66,17 +75,18 @@ class AlphaVantageProvider(BaseDataProvider):
     ) -> List[FinancialStatement]:
         cached_stmt = self.cache.get_financial_statements(ticker, "av_quarterly_v2")
         if cached_stmt:
+            print(f"  ⚡ [CACHE HIT] Financial Statements ({ticker.upper()}, {period})")
             return [FinancialStatement(**s) for s in cached_stmt]
 
         try:
             # 1. Fetch Standardized Quarterly Income Statement (Cached URL Call)
             inc_url = f"https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol={ticker.upper()}&apikey={self.api_key}"
-            inc_data = self._fetch_url(inc_url)
+            inc_data = self._fetch_url(inc_url, label=f"Alpha Vantage: INCOME_STATEMENT ({ticker.upper()})")
             inc_reports = inc_data.get("quarterlyReports", [])
 
             # 2. Fetch Standardized Quarterly Cash Flow Statement (Cached URL Call)
             cf_url = f"https://www.alphavantage.co/query?function=CASH_FLOW&symbol={ticker.upper()}&apikey={self.api_key}"
-            cf_data = self._fetch_url(cf_url)
+            cf_data = self._fetch_url(cf_url, label=f"Alpha Vantage: CASH_FLOW ({ticker.upper()})")
             cf_reports = cf_data.get("quarterlyReports", [])
 
             cf_map = {
@@ -132,21 +142,25 @@ class AlphaVantageProvider(BaseDataProvider):
                 self.cache.save_financial_statements(
                     ticker, "av_quarterly_v2", [s.model_dump() for s in statements]
                 )
+                print(f"  💾 [CACHE SAVED] Financial Statements ({ticker.upper()}, {len(statements)} quarters)")
                 return statements
 
         except Exception as e:
-            print(f"AlphaVantage Provider Warning: {e}")
+            print(f"  ⚠️ [ERROR] AlphaVantage Provider Warning for {ticker.upper()}: {e}")
 
         return []
 
     def get_price_history(self, ticker: str, period: str = "10y") -> pd.DataFrame:
         cached_df = self.cache.get_price_history(ticker, period)
         if cached_df is not None:
+            print(f"  ⚡ [CACHE HIT] Price History ({ticker.upper()}, {period})")
             return cached_df
 
+        print(f"  🌐 [LIVE API CALL] Yahoo Finance: Price History ({ticker.upper()}, {period})")
         yf_ticker = yf.Ticker(ticker)
         df = yf_ticker.history(period=period)
         if not df.empty:
             df.index = df.index.astype(str)
             self.cache.save_price_history(ticker, period, df)
+            print(f"  💾 [CACHE SAVED] Price History ({ticker.upper()}, {period})")
         return df
