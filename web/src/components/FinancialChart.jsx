@@ -599,66 +599,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
           .text('Stock Price ($)');
       }
 
-      // Title
-      let titleText = `${ticker} — `;
-      if (activeTab === 'cash') titleText += 'Financial Performance & Stock Price';
-      else if (activeTab === 'valuation') titleText += 'Valuation History (P/E, P/S, FCF Yield & Stock Price)';
-      else titleText += 'Relative Growth (% Return since Start)';
 
-      svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', 28)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '20px')
-        .style('font-weight', 'bold')
-        .style('fill', '#111')
-        .text(titleText);
-
-      // Legend
-      const allItems = activeTab === 'cash'
-        ? [...currentMetrics, { key: 'yoyGrowth', label: 'Cum Rev Growth (%)', color: '#d97706', type: 'line' }, { key: 'stock', label: 'Stock Price', color: '#000' }]
-        : [...currentMetrics, { key: 'stock', label: activeTab === 'growth' ? 'Stock Return (%)' : 'Stock Price', color: '#000' }];
-      const legendG = svg.append('g').attr('transform', `translate(${margin.left + 50}, ${margin.top - 18})`);
-      let lx = 0;
-
-      for (const item of allItems) {
-        const isHidden = hidden.has(item.key);
-        const itemG = legendG.append('g')
-          .attr('transform', `translate(${lx}, 0)`)
-          .style('cursor', 'pointer')
-          .style('opacity', isHidden ? 0.3 : 1)
-          .on('click', () => {
-            setHidden((prev) => {
-              const next = new Set(prev);
-              if (next.has(item.key)) next.delete(item.key);
-              else next.add(item.key);
-              return next;
-            });
-          });
-
-        if (item.key === 'stock' || item.type === 'line') {
-          itemG.append('line')
-            .attr('x1', 0).attr('y1', 6).attr('x2', 18).attr('y2', 6)
-            .attr('stroke', item.color)
-            .attr('stroke-width', 2.5);
-        } else {
-          itemG.append('rect')
-            .attr('width', 16).attr('height', 12)
-            .attr('fill', item.color)
-            .attr('opacity', 0.9)
-            .attr('rx', 2);
-        }
-
-        const textEl = itemG.append('text')
-          .attr('x', 22)
-          .attr('y', 11)
-          .style('font-size', '13px')
-          .style('font-weight', '600')
-          .style('fill', '#333')
-          .text(item.label);
-
-        lx += textEl.node().getComputedTextLength() + 36;
-      }
 
       // Tooltip Overlay
       const tooltip = d3.select(tooltipRef.current);
