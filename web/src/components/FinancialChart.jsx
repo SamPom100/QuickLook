@@ -50,7 +50,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
   const svgRef = useRef(null);
   const tooltipRef = useRef(null);
 
-  const [activeTab, setActiveTab] = useState('cash'); // 'cash', 'valuation', 'growth', or 'dcf'
+  const [activeTab, setActiveTab] = useState('cash'); // 'cash', 'valuation', 'growth', 'dcf_drivers', or 'dcf'
   const [dimensions, setDimensions] = useState({ width: 1400, height: 750 });
   const [hidden, setHidden] = useState(new Set());
 
@@ -87,7 +87,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
   // D3 rendering
   useEffect(() => {
-    if (!data || !svgRef.current || activeTab === 'dcf' || activeTab === 'growth') return;
+    if (!data || !svgRef.current || activeTab === 'dcf' || activeTab === 'dcf_drivers') return;
 
     const { quarters, stockPrices, ticker, kpis } = data;
     const numQ = quarters.length;
@@ -799,6 +799,18 @@ export default function FinancialChart({ data, onSelectTicker }) {
             fontWeight: activeTab === 'growth' ? '700' : '500',
           }}
         >
+          🚀 Relative Growth (% Return)
+        </button>
+        <button
+          onClick={() => setActiveTab('dcf_drivers')}
+          style={{
+            ...tabButtonStyle,
+            background: activeTab === 'dcf_drivers' ? '#7c3aed' : '#f0f0f0',
+            color: activeTab === 'dcf_drivers' ? '#fff' : '#444',
+            fontWeight: activeTab === 'dcf_drivers' ? '700' : '500',
+            border: activeTab === 'dcf_drivers' ? '1px solid #7c3aed' : '1px solid #ccc',
+          }}
+        >
           🔬 DCF Historical Drivers (EPS, Growth %, P/E)
         </button>
         <button
@@ -817,7 +829,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
       {activeTab === 'dcf' ? (
         <DCFCalculator data={data} />
-      ) : activeTab === 'growth' ? (
+      ) : activeTab === 'dcf_drivers' ? (
         <DCFHistoryCharts data={data} />
       ) : (
         <>
