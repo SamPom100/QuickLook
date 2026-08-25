@@ -37,7 +37,25 @@ export default function DCFHistoryCharts({ data }) {
   useEffect(() => {
     if (!svgRef.current || quarters.length === 0) return;
 
-    const numQ = quarters.length;
+    // Enrich quarters with fallback YoY calculation if missing
+    const enrichedQuarters = quarters.map((q, i) => {
+      let growthYoY = q.epsGrowthYoY;
+      if (growthYoY === undefined || growthYoY === null) {
+        if (i >= 4) {
+          const curEps = q.epsTTM;
+          const prevEps = quarters[i - 4]?.epsTTM;
+          if (curEps !== null && curEps !== undefined && prevEps !== null && prevEps !== undefined && prevEps > 0) {
+            growthYoY = Math.round(((curEps - prevEps) / prevEps) * 1000) / 10;
+          }
+        }
+      }
+      return {
+        ...q,
+        epsGrowthYoY: growthYoY,
+      };
+    });
+
+    const numQ = enrichedQuarters.length;
     const { width, height } = dimensions;
     const margin = { top: 40, right: 60, bottom: 45, left: 75 };
     const innerW = width - margin.left - margin.right;
@@ -58,14 +76,6 @@ export default function DCFHistoryCharts({ data }) {
     epsGrad.append('stop').attr('offset', '0%').attr('stop-color', '#0284c7').attr('stop-opacity', 0.4);
     epsGrad.append('stop').attr('offset', '100%').attr('stop-color', '#0284c7').attr('stop-opacity', 0.02);
 
-    // Growth Gradient (Amber)
-    const growthGrad = defs.append('linearGradient')
-      .attr('id', 'growth-gradient')
-      .attr('x1', '0%').attr('y1', '0%')
-      .attr('x2', '0%').attr('y2', '100%');
-    growthGrad.append('stop').attr('offset', '0%').attr('stop-color', '#f59e0b').attr('stop-opacity', 0.35);
-    growthGrad.append('stop').attr('offset', '100%').attr('stop-color', '#f59e0b').attr('stop-opacity', 0.02);
-
     // PE Gradient (Purple)
     const peGrad = defs.append('linearGradient')
       .attr('id', 'pe-gradient')
@@ -80,13 +90,13 @@ export default function DCFHistoryCharts({ data }) {
 
     const gMain = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-    const labels = quarters.map((q) => q.date);
+    const labels = enrichedQuarters.map((q) => q.date);
 
     // Common X Band scale
     const xBand = d3.scaleBand()
       .domain(d3.range(numQ))
       .range([0, innerW])
-      .padding(0);
+      .padding(0.12);
 
     const xLin = d3.scaleLinear()
       .domain([0, numQ - 1])
@@ -96,7 +106,7 @@ export default function DCFHistoryCharts({ data }) {
     // PANEL 1: EPS ($ TTM) History
     // ==========================================
     const gP1 = gMain.append('g').attr('transform', `translate(0, 0)`);
-    const epsVals = quarters.map((q) => q.epsTTM).filter((v) => v !== null && v !== undefined);
+    const epsVals = enrichedQuarters.map((q) => q.epsTTM).filter((v) => v !== null && v !== undefined);
     const epsMax = epsVals.length ? d3.max(epsVals) * 1.15 : 10;
     const epsMin = epsVals.length ? Math.min(0, d3.min(epsVals) * 0.9) : 0;
     const yEps = d3.scaleLinear().domain([epsMin, epsMax]).range([panelH, 0]).nice();
@@ -116,7 +126,7 @@ export default function DCFHistoryCharts({ data }) {
     gP1.selectAll('.domain').remove();
 
     // EPS Area & Line
-    const epsLineData = quarters
+    const epsLineData = enrichedQuarters
       .map((q, i) => ({ x: i, y: q.epsTTM, date: q.date }))
       .filter((d) => d.y !== null && d.y !== undefined);
 
@@ -183,12 +193,12 @@ export default function DCFHistoryCharts({ data }) {
     const p2YOffset = panelH + gap;
     const gP2 = gMain.append('g').attr('transform', `translate(0, ${p2YOffset})`);
 
-    const growthVals = quarters
+    const growthVals = enrichedQuarters
       .map((q) => q.epsGrowthYoY)
       .filter((v) => v !== null && v !== undefined && !isNaN(v));
 
-    const gMax = growthVals.length ? Math.max(30, d3.max(growthVals) * 1.15) : 50;
-    const gMin = growthVals.length ? Math.min(-15, d3.min(growthVals) * 1.15) : -20;
+    const gMax = growthVals.length ? Math.max(30, Math.min(250, d3.max(growthVals) * 1.15)) : 50;
+    const gMin = growthVals.length ? Math.min(-15, Math.max(-100, d3.min(growthVals) * 1.15)) : -20;
     const yGrowth = d3.scaleLinear().domain([gMin, gMax]).range([panelH, 0]).nice();
 
     gP2.append('rect')
@@ -205,13 +215,14 @@ export default function DCFHistoryCharts({ data }) {
     gP2.selectAll('.domain').remove();
 
     // 0% Reference Line
-    if (yGrowth(0) >= 0 && yGrowth(0) <= panelH) {
+    const yZeroPos = yGrowth(0);
+    if (yZeroPos >= 0 && yZeroPos <= panelH) {
       gP2.append('line')
         .attr('x1', 0)
-        .attr('y1', yGrowth(0))
+        .attr('y1', yZeroPos)
         .attr('x2', innerW)
-        .attr('y2', yGrowth(0))
-        .attr('stroke', '#94a3b8')
+        .attr('y2', yZeroPos)
+        .attr('stroke', '#64748b')
         .attr('stroke-dasharray', '4,3')
         .attr('stroke-width', 1.5);
     }
@@ -223,7 +234,7 @@ export default function DCFHistoryCharts({ data }) {
         .attr('y1', yGrowth(growth5Y))
         .attr('x2', innerW)
         .attr('y2', yGrowth(growth5Y))
-        .attr('stroke', '#16a34a')
+        .attr('stroke', '#059669')
         .attr('stroke-dasharray', '3,3')
         .attr('stroke-width', 1.5);
 
@@ -233,48 +244,61 @@ export default function DCFHistoryCharts({ data }) {
         .attr('text-anchor', 'end')
         .style('font-size', '10px')
         .style('font-weight', '700')
-        .style('fill', '#15803d')
-        .text(`5Y CAGR: +${growth5Y}%`);
+        .style('fill', '#059669')
+        .text(`5Y CAGR Baseline: +${growth5Y}%`);
     }
 
-    const growthLineData = quarters
+    // Render YoY Growth Bars (Green for positive, Red for negative)
+    enrichedQuarters.forEach((q, i) => {
+      if (q.epsGrowthYoY !== null && q.epsGrowthYoY !== undefined && !isNaN(q.epsGrowthYoY)) {
+        const cx = xBand(i) + xBand.bandwidth() / 2;
+        const bw = Math.max(5, xBand.bandwidth() * 0.75);
+        const clampedVal = Math.max(gMin, Math.min(gMax, q.epsGrowthYoY));
+        const yVal = yGrowth(clampedVal);
+        const y0 = Math.max(0, Math.min(panelH, yGrowth(0)));
+        const barH = Math.max(2, Math.abs(yVal - y0));
+        const barY = clampedVal >= 0 ? yVal : y0;
+        const barColor = q.epsGrowthYoY >= 0 ? '#10b981' : '#ef4444';
+
+        gP2.append('rect')
+          .attr('x', cx - bw / 2)
+          .attr('y', barY)
+          .attr('width', bw)
+          .attr('height', barH)
+          .attr('fill', barColor)
+          .attr('rx', 2)
+          .attr('opacity', 0.85);
+      }
+    });
+
+    // Trendline connecting the tops of the growth bars
+    const growthLineData = enrichedQuarters
       .map((q, i) => ({ x: i, y: q.epsGrowthYoY, date: q.date }))
-      .filter((d) => d.y !== null && d.y !== undefined);
+      .filter((d) => d.y !== null && d.y !== undefined && !isNaN(d.y));
 
     if (growthLineData.length > 0) {
       const growthLineGen = d3.line()
         .x((d) => xBand(d.x) + xBand.bandwidth() / 2)
-        .y((d) => yGrowth(d.y))
+        .y((d) => yGrowth(Math.max(gMin, Math.min(gMax, d.y))))
         .curve(d3.curveMonotoneX);
-
-      const growthAreaGen = d3.area()
-        .x((d) => xBand(d.x) + xBand.bandwidth() / 2)
-        .y0(yGrowth(0))
-        .y1((d) => yGrowth(d.y))
-        .curve(d3.curveMonotoneX);
-
-      gP2.append('path')
-        .datum(growthLineData)
-        .attr('d', growthAreaGen)
-        .attr('fill', 'url(#growth-gradient)');
 
       gP2.append('path')
         .datum(growthLineData)
         .attr('d', growthLineGen)
         .attr('fill', 'none')
-        .attr('stroke', '#f59e0b')
-        .attr('stroke-width', 2.5);
+        .attr('stroke', '#047857')
+        .attr('stroke-width', 2);
 
       gP2.selectAll('.dot-growth')
         .data(growthLineData)
         .enter().append('circle')
         .attr('cx', (d) => xBand(d.x) + xBand.bandwidth() / 2)
-        .attr('cy', (d) => yGrowth(d.y))
-        .attr('r', 3.5)
-        .attr('fill', (d) => d.y >= 0 ? '#16a34a' : '#dc2626');
+        .attr('cy', (d) => yGrowth(Math.max(gMin, Math.min(gMax, d.y))))
+        .attr('r', 3)
+        .attr('fill', (d) => d.y >= 0 ? '#047857' : '#b91c1c');
     }
 
-    const yAxisP2 = gP2.append('g').call(d3.axisLeft(yGrowth).ticks(4).tickFormat((v) => `${v > 0 ? '+' : ''}${v}%`));
+    const yAxisP2 = gP2.append('g').call(d3.axisLeft(yGrowth).ticks(4).tickFormat((v) => `${v > 0 ? '+' : ''}${Math.round(v)}%`));
     yAxisP2.select('.domain').attr('stroke', '#cbd5e1');
     yAxisP2.selectAll('.tick text').style('font-size', '11px').style('fill', '#475569');
 
@@ -283,7 +307,7 @@ export default function DCFHistoryCharts({ data }) {
       .attr('y', 18)
       .style('font-size', '12px')
       .style('font-weight', '800')
-      .style('fill', '#b45309')
+      .style('fill', '#047857')
       .text('2. 🚀 EPS YoY GROWTH RATE (%) HISTORY');
 
     // ==========================================
@@ -292,7 +316,7 @@ export default function DCFHistoryCharts({ data }) {
     const p3YOffset = (panelH + gap) * 2;
     const gP3 = gMain.append('g').attr('transform', `translate(0, ${p3YOffset})`);
 
-    const peVals = quarters
+    const peVals = enrichedQuarters
       .map((q) => q.peRatio)
       .filter((v) => v !== null && v !== undefined && v > 0);
 
@@ -334,7 +358,7 @@ export default function DCFHistoryCharts({ data }) {
         .text(`5Y Median P/E: ${medianPe5Y}x`);
     }
 
-    const peLineData = quarters
+    const peLineData = enrichedQuarters
       .map((q, i) => ({ x: i, y: q.peRatio, date: q.date }))
       .filter((d) => d.y !== null && d.y !== undefined);
 
@@ -442,7 +466,7 @@ export default function DCFHistoryCharts({ data }) {
           return;
         }
 
-        const q = quarters[qi];
+        const q = enrichedQuarters[qi];
         const cx = xBand(qi) + xBand.bandwidth() / 2;
 
         crosshair

@@ -314,7 +314,18 @@ def get_data(ticker):
         q["psRatio"] = q_ps if (q_ps and 0 < q_ps < 100) else None
         q["fcfYield"] = q_fcf_yield if (q_fcf_yield and -50 < q_fcf_yield < 50) else None
         q["epsTTM"] = round(float(eps_q), 2) if eps_q > 0 else None
-        q["epsGrowthYoY"] = eps_growth_yoy
+
+    # Assign YoY EPS Growth % (comparing TTM EPS to TTM EPS 4 quarters prior)
+    for i in range(len(quarters)):
+        if i >= 4:
+            cur_eps = quarters[i].get("epsTTM")
+            prev_eps = quarters[i - 4].get("epsTTM")
+            if cur_eps is not None and prev_eps is not None and prev_eps > 0:
+                quarters[i]["epsGrowthYoY"] = round(((cur_eps - prev_eps) / prev_eps) * 100.0, 1)
+            else:
+                quarters[i]["epsGrowthYoY"] = None
+        else:
+            quarters[i]["epsGrowthYoY"] = None
 
     # Historical EPS / Net Income CAGRs (1Y, 3Y, 5Y)
     eps_growth_1y = None
