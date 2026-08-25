@@ -302,6 +302,7 @@ def get_data(ticker):
         q["peRatio"] = q_pe if (q_pe and 0 < q_pe < 250) else None
         q["psRatio"] = q_ps if (q_ps and 0 < q_ps < 100) else None
         q["fcfYield"] = q_fcf_yield if (q_fcf_yield and -50 < q_fcf_yield < 50) else None
+        q["epsTTM"] = round(float(eps_q), 2) if eps_q > 0 else None
 
     # Historical EPS / Net Income CAGRs (1Y, 3Y, 5Y)
     eps_growth_1y = None

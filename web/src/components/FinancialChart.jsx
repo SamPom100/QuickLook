@@ -31,12 +31,14 @@ const VALUATION_LEGEND_ITEMS = [
 
 const INDEX_METRICS = [
   { key: 'revenueIdx',      label: 'Revenue Growth (%)',        color: 'rgb(31, 119, 180)',  type: 'line' },
+  { key: 'epsIdx',          label: 'EPS Growth (%)',            color: 'rgb(245, 158, 11)',  type: 'line' },
   { key: 'netIncomeIdx',    label: 'Net Income Growth (%)',     color: 'rgb(152, 223, 138)', type: 'line' },
   { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth (%)', color: 'rgb(44, 160, 44)',   type: 'line' },
 ];
 
 const INDEX_LEGEND_ITEMS = [
   { key: 'revenueIdx',      label: 'Revenue Growth (%)',        color: 'rgb(31, 119, 180)',  type: 'line' },
+  { key: 'epsIdx',          label: 'EPS Growth (%)',            color: 'rgb(245, 158, 11)',  type: 'line' },
   { key: 'netIncomeIdx',    label: 'Net Income Growth (%)',     color: 'rgb(152, 223, 138)', type: 'line' },
   { key: 'freeCashFlowIdx', label: 'Free Cash Flow Growth (%)', color: 'rgb(44, 160, 44)',   type: 'line' },
   { key: 'stock',           label: 'Stock Return (%)',          color: '#000',               type: 'line' },
@@ -108,13 +110,20 @@ export default function FinancialChart({ data, onSelectTicker }) {
     const baseRev = firstQ.revenue || 1;
     const baseNI = firstQ.netIncome || 1;
     const baseFCF = firstQ.freeCashFlow || 1;
+    const baseEPS = (firstQ.epsTTM !== undefined && firstQ.epsTTM !== null && firstQ.epsTTM !== 0)
+      ? firstQ.epsTTM
+      : (firstQ.netIncome || 1);
 
-    const indexedQuarters = quarters.map((q) => ({
-      ...q,
-      revenueIdx: (((q.revenue - baseRev) / Math.abs(baseRev)) * 100),
-      netIncomeIdx: (((q.netIncome - baseNI) / Math.abs(baseNI)) * 100),
-      freeCashFlowIdx: (((q.freeCashFlow - baseFCF) / Math.abs(baseFCF)) * 100),
-    }));
+    const indexedQuarters = quarters.map((q) => {
+      const qEps = (q.epsTTM !== undefined && q.epsTTM !== null) ? q.epsTTM : q.netIncome;
+      return {
+        ...q,
+        revenueIdx: (((q.revenue - baseRev) / Math.abs(baseRev)) * 100),
+        epsIdx: (((qEps - baseEPS) / Math.abs(baseEPS)) * 100),
+        netIncomeIdx: (((q.netIncome - baseNI) / Math.abs(baseNI)) * 100),
+        freeCashFlowIdx: (((q.freeCashFlow - baseFCF) / Math.abs(baseFCF)) * 100),
+      };
+    });
 
     const baseStockPrice = (stockPrices && stockPrices.length > 0) ? stockPrices[0].y : 1;
     const indexedStockPrices = stockPrices.map((sp) => ({
@@ -637,9 +646,10 @@ export default function FinancialChart({ data, onSelectTicker }) {
             if (!hidden.has('fcfYield')) rows += `<div style="color:rgb(44,160,44)">FCF Yield: ${q.fcfYield ? fmt(q.fcfYield) + '%' : 'N/A'}</div>`;
           } else {
             // Tab 3 Tooltip
-            if (!hidden.has('revenueIdx'))      rows += `<div style="color:rgb(31,119,180)">Revenue Growth: ${qIdx.revenueIdx >= 0 ? '+' : ''}${fmt(qIdx.revenueIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.revenue)}B)</span></div>`;
-            if (!hidden.has('netIncomeIdx'))    rows += `<div style="color:rgb(152,223,138)">Net Income Growth: ${qIdx.netIncomeIdx >= 0 ? '+' : ''}${fmt(qIdx.netIncomeIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.netIncome)}B)</span></div>`;
-            if (!hidden.has('freeCashFlowIdx')) rows += `<div style="color:rgb(44,160,44)">FCF Growth: ${qIdx.freeCashFlowIdx >= 0 ? '+' : ''}${fmt(qIdx.freeCashFlowIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.freeCashFlow)}B)</span></div>`;
+            if (!hidden.has('revenueIdx'))      rows += `<div style="color:rgb(31,119,180)">Revenue Growth: ${qIdx.revenueIdx >= 0 ? '+' : ''}${fmt(qIdx.revenueIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.revenue)}${unitSuffix})</span></div>`;
+            if (!hidden.has('epsIdx'))          rows += `<div style="color:rgb(245,158,11)">EPS Growth: ${qIdx.epsIdx >= 0 ? '+' : ''}${fmt(qIdx.epsIdx)}% <span style="font-size:11px;opacity:0.8">($${q.epsTTM !== undefined && q.epsTTM !== null ? Number(q.epsTTM).toFixed(2) : fmt(q.netIncome)})</span></div>`;
+            if (!hidden.has('netIncomeIdx'))    rows += `<div style="color:rgb(152,223,138)">Net Income Growth: ${qIdx.netIncomeIdx >= 0 ? '+' : ''}${fmt(qIdx.netIncomeIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.netIncome)}${unitSuffix})</span></div>`;
+            if (!hidden.has('freeCashFlowIdx')) rows += `<div style="color:rgb(44,160,44)">FCF Growth: ${qIdx.freeCashFlowIdx >= 0 ? '+' : ''}${fmt(qIdx.freeCashFlowIdx)}% <span style="font-size:11px;opacity:0.8">($${fmt(q.freeCashFlow)}${unitSuffix})</span></div>`;
           }
 
           if (!hidden.has('stock')) {
