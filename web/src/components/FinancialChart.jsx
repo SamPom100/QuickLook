@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import DCFCalculator from './DCFCalculator';
+import DCFHistoryCharts from './DCFHistoryCharts';
 
 const CASH_METRICS = [
   { key: 'revenue',      label: 'Revenue',        color: 'rgb(31, 119, 180)',  widthFrac: 1.0,  type: 'bar' },
@@ -86,7 +87,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
   // D3 rendering
   useEffect(() => {
-    if (!data || !svgRef.current || activeTab === 'dcf') return;
+    if (!data || !svgRef.current || activeTab === 'dcf' || activeTab === 'growth') return;
 
     const { quarters, stockPrices, ticker, kpis } = data;
     const numQ = quarters.length;
@@ -798,7 +799,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
             fontWeight: activeTab === 'growth' ? '700' : '500',
           }}
         >
-          🚀 Relative Growth (% Return)
+          🔬 DCF Historical Drivers (EPS, Growth %, P/E)
         </button>
         <button
           onClick={() => setActiveTab('dcf')}
@@ -816,6 +817,8 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
       {activeTab === 'dcf' ? (
         <DCFCalculator data={data} />
+      ) : activeTab === 'growth' ? (
+        <DCFHistoryCharts data={data} />
       ) : (
         <>
           {/* Interactive Legend Toggle Toolbar */}

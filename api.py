@@ -299,10 +299,22 @@ def get_data(ticker):
         q_ps = round(float(q_price / sps_q), 2) if sps_q > 0 else None
         q_fcf_yield = round(float((t4q_fcf / q_mcap) * 100), 2) if q_mcap > 0 else None
 
+        # Compute YoY EPS Growth % (comparing TTM Net Income against TTM Net Income 4 quarters prior)
+        prev_t4q_ni = None
+        if i >= 4:
+            prev_t4q_ni = ni_raw[max(0, i-7):i-3].sum()
+            if i < 7:
+                prev_t4q_ni = prev_t4q_ni * (4 / (i - 3))
+        
+        eps_growth_yoy = None
+        if prev_t4q_ni and prev_t4q_ni > 0 and t4q_ni > 0:
+            eps_growth_yoy = round(((t4q_ni - prev_t4q_ni) / abs(prev_t4q_ni)) * 100.0, 1)
+
         q["peRatio"] = q_pe if (q_pe and 0 < q_pe < 250) else None
         q["psRatio"] = q_ps if (q_ps and 0 < q_ps < 100) else None
         q["fcfYield"] = q_fcf_yield if (q_fcf_yield and -50 < q_fcf_yield < 50) else None
         q["epsTTM"] = round(float(eps_q), 2) if eps_q > 0 else None
+        q["epsGrowthYoY"] = eps_growth_yoy
 
     # Historical EPS / Net Income CAGRs (1Y, 3Y, 5Y)
     eps_growth_1y = None
