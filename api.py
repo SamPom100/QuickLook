@@ -324,10 +324,13 @@ def get_data(ticker):
             eps_growth_5y = round(((ttm_ni / ni_prev5) ** (1.0 / 5.0) - 1.0) * 100.0, 1)
 
     # 5-Year and 3-Year Valuation Multiples (Average Mean & Robust Median)
+    # Exclude extreme outliers >50x (near-zero earnings era artifacts) before computing stats
     pe_history_5y = [q["peRatio"] for q in quarters[-20:] if q.get("peRatio") is not None]
+    pe_history_5y_clean = [p for p in pe_history_5y if p <= 60]  # strip loss-era / earnings-trough spikes
     avg_pe_5y = round(float(np.mean(pe_history_5y)), 1) if pe_history_5y else None
     median_pe_5y = round(float(np.median(pe_history_5y)), 1) if pe_history_5y else None
-    
+    median_pe_5y_clean = round(float(np.median(pe_history_5y_clean)), 1) if pe_history_5y_clean else median_pe_5y
+
     pe_history_3y = [q["peRatio"] for q in quarters[-12:] if q.get("peRatio") is not None]
     avg_pe_3y = round(float(np.mean(pe_history_3y)), 1) if pe_history_3y else None
     median_pe_3y = round(float(np.median(pe_history_3y)), 1) if pe_history_3y else None
@@ -335,6 +338,37 @@ def get_data(ticker):
     # 5-Year Average Revenue YoY Growth %
     rev_growth_5y = [q["yoyRevenueGrowth"] for q in quarters[-20:] if q.get("yoyRevenueGrowth") is not None]
     avg_rev_growth_5y = round(float(np.mean(rev_growth_5y)), 1) if rev_growth_5y else None
+
+    # Analyst EPS Estimates from Yahoo Finance (forward-looking consensus)
+    analyst_eps_fy0 = None       # Current fiscal year EPS estimate
+    analyst_eps_fy1 = None       # Next fiscal year EPS estimate
+    analyst_growth_fy0 = None    # YoY growth implied by FY0 estimate
+    analyst_growth_fy1 = None    # YoY growth implied by FY1 estimate
+    analyst_count = None         # Number of analysts covering
+    try:
+        yf_t = yf.Ticker(ticker)
+        ee = yf_t.earnings_estimate
+        if ee is not None and not ee.empty:
+            if '0y' in ee.index:
+                raw_0y = ee.loc['0y', 'avg']
+                raw_g0 = ee.loc['0y', 'growth']
+                raw_n0 = ee.loc['0y', 'numberOfAnalysts']
+                if raw_0y and not pd.isna(raw_0y):
+                    analyst_eps_fy0 = round(float(raw_0y), 2)
+                if raw_g0 and not pd.isna(raw_g0):
+                    analyst_growth_fy0 = round(float(raw_g0) * 100, 1)
+                if raw_n0 and not pd.isna(raw_n0):
+                    analyst_count = int(raw_n0)
+            if '+1y' in ee.index:
+                raw_1y = ee.loc['+1y', 'avg']
+                raw_g1 = ee.loc['+1y', 'growth']
+                if raw_1y and not pd.isna(raw_1y):
+                    analyst_eps_fy1 = round(float(raw_1y), 2)
+                if raw_g1 and not pd.isna(raw_g1):
+                    analyst_growth_fy1 = round(float(raw_g1) * 100, 1)
+        print(f"  ✅ [ANALYST] FY0 EPS: ${analyst_eps_fy0}, FY1 EPS: ${analyst_eps_fy1}, Analysts: {analyst_count}")
+    except Exception as e:
+        print(f"  ⚠️ [ANALYST] Could not fetch analyst estimates: {e}")
 
     kpis = {
         "latestPrice": round(latest_price, 2),
@@ -348,9 +382,15 @@ def get_data(ticker):
         "epsGrowth5Y": eps_growth_5y,
         "avgPE5Y": avg_pe_5y,
         "medianPE5Y": median_pe_5y,
+        "medianPE5YClean": median_pe_5y_clean,  # Outlier-stripped (<=60x) median, used as safer default
         "avgPE3Y": avg_pe_3y,
         "medianPE3Y": median_pe_3y,
         "avgRevGrowth5Y": avg_rev_growth_5y,
+        "analystEpsFY0": analyst_eps_fy0,
+        "analystEpsFY1": analyst_eps_fy1,
+        "analystGrowthFY0": analyst_growth_fy0,
+        "analystGrowthFY1": analyst_growth_fy1,
+        "analystCount": analyst_count,
         "unitSuffix": unit_suffix,
     }
 

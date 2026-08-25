@@ -14,19 +14,43 @@ export default function DCFCalculator({ data }) {
   const avgPe5Y = kpis?.avgPE5Y;
   const avgPe3Y = kpis?.avgPE3Y;
   const medianPe5Y = kpis?.medianPE5Y;
+  const medianPe5YClean = kpis?.medianPE5YClean;   // Outlier-stripped (≤60x), safer for defaults
   const medianPe3Y = kpis?.medianPE3Y;
   const avgRevGrowth5Y = kpis?.avgRevGrowth5Y;
 
-  // Default suggested growth rate & multiple (use 5Y median if available)
-  const defaultGrowth = (growth5Y && growth5Y > -10 && growth5Y < 60)
-    ? growth5Y
-    : ((growth3Y && growth3Y > -10 && growth3Y < 60) ? growth3Y : 12.0);
+  // Analyst consensus forward estimates
+  const analystEpsFY0 = kpis?.analystEpsFY0;       // This fiscal year consensus EPS
+  const analystEpsFY1 = kpis?.analystEpsFY1;       // Next fiscal year consensus EPS
+  const analystGrowthFY0 = kpis?.analystGrowthFY0; // YoY % implied by FY0 vs last year
+  const analystGrowthFY1 = kpis?.analystGrowthFY1; // YoY % implied by FY1 vs FY0
+  const analystCount = kpis?.analystCount;
 
-  const defaultMultiple = (medianPe5Y && medianPe5Y > 5 && medianPe5Y < 70)
-    ? medianPe5Y
-    : (ttmPe > 0 ? ttmPe : 22.0);
+  // Default growth: 5Y CAGR capped at 30% (beyond 30% is unlikely to sustain at scale)
+  // Falls through: 5Y CAGR → 3Y CAGR → analyst FY1 growth → 12% market baseline
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const defaultGrowth = (() => {
+    if (growth5Y != null && growth5Y > -10 && growth5Y <= 30) return growth5Y;
+    if (growth5Y != null && growth5Y > 30) {
+      // Haircut aggressive CAGRs: use 60% of the 5Y rate as a regression-to-mean estimate
+      const haircutted = Math.round(growth5Y * 0.6 * 10) / 10;
+      return clamp(haircutted, 5, 30);
+    }
+    if (growth3Y != null && growth3Y > -10 && growth3Y <= 30) return growth3Y;
+    if (analystGrowthFY1 != null && analystGrowthFY1 > 0 && analystGrowthFY1 <= 40) return Math.round(analystGrowthFY1 * 10) / 10;
+    return 12.0;
+  })();
 
-  const compressedPe = medianPe5Y ? Math.round(medianPe5Y * 0.85 * 10) / 10 : null;
+  // Default exit PE: use the outlier-stripped 5Y Median (≤60x) as a safer anchor
+  const defaultMultiple = (() => {
+    const cleanMedian = medianPe5YClean || medianPe5Y;
+    if (cleanMedian && cleanMedian > 5 && cleanMedian <= 50) return cleanMedian;
+    if (ttmPe > 5 && ttmPe <= 50) return ttmPe;
+    return 22.0;
+  })();
+
+  const compressedPe = (medianPe5YClean || medianPe5Y)
+    ? Math.round((medianPe5YClean || medianPe5Y) * 0.85 * 10) / 10
+    : null;
 
   // User Assumptions State (startingEps is a string to allow fluid typing, backspacing & clearing)
   const [startingEps, setStartingEps] = useState(String(ttmEps));
@@ -285,7 +309,7 @@ export default function DCFCalculator({ data }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                🏛️ 5-Year Historical Baseline (Medians & CAGRs)
+                🏛️ 5-Year Historical Baseline
               </span>
               <span
                 style={{ fontSize: 11, background: '#dcfce7', color: '#166534', padding: '1px 6px', borderRadius: 4, cursor: 'help' }}
@@ -300,6 +324,12 @@ export default function DCFCalculator({ data }) {
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
                   {medianPe5Y ? `${medianPe5Y}x` : (ttmPe ? `${ttmPe.toFixed(1)}x` : 'N/A')}
                   {medianPe3Y && <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b', marginLeft: 4 }}>(3Y: {medianPe3Y}x)</span>}
+                  {medianPe5YClean && medianPe5YClean !== medianPe5Y && (
+                    <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: 3, marginLeft: 5 }}
+                      title="Raw median includes outlier quarters with near-zero earnings (very high P/E). Stripped median excludes P/E >60x.">
+                      ⚠️ Raw: {medianPe5Y}x (Stripped: {medianPe5YClean}x)
+                    </span>
+                  )}
                 </div>
               </div>
               <div>
@@ -311,8 +341,77 @@ export default function DCFCalculator({ data }) {
               </div>
             </div>
           </div>
+
+          {/* Card 3: Analyst Consensus (Forward-Looking) */}
+          {(analystEpsFY0 || analystEpsFY1) && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  🔭 Analyst Consensus (Forward)
+                </span>
+                <span
+                  style={{ fontSize: 11, background: '#ede9fe', color: '#5b21b6', padding: '1px 6px', borderRadius: 4, cursor: 'help' }}
+                  title={`Wall Street consensus estimates from ${analystCount || '?'} analysts covering this stock. Use as a sanity-check against your own growth rate assumption.`}
+                >
+                  ℹ️ {analystCount ? `${analystCount} Analysts` : 'Consensus'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                {analystEpsFY0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>FY0 EPS Est.</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                      ${analystEpsFY0.toFixed(2)}
+                      {analystGrowthFY0 != null && (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: analystGrowthFY0 >= 0 ? '#16a34a' : '#dc2626', marginLeft: 4 }}>
+                          ({analystGrowthFY0 > 0 ? '+' : ''}{analystGrowthFY0}% YoY)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {analystEpsFY1 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>FY1 EPS Est.</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                      ${analystEpsFY1.toFixed(2)}
+                      {analystGrowthFY1 != null && (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: analystGrowthFY1 >= 0 ? '#16a34a' : '#dc2626', marginLeft: 4 }}>
+                          ({analystGrowthFY1 > 0 ? '+' : ''}{analystGrowthFY1}% YoY)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Overheating Warning — shown when implied CAGR exceeds 25% */}
+      {impliedCagr > 25 && (
+        <div style={{
+          background: '#fff7ed',
+          border: '1.5px solid #fdba74',
+          borderRadius: 10,
+          padding: '12px 18px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#9a3412' }}>
+              Model implies {impliedCagr.toFixed(1)}% annual return — scrutinize your assumptions
+            </div>
+            <div style={{ fontSize: 12, color: '#c2410c', marginTop: 3 }}>
+              Fewer than 1% of companies have sustained &gt;25% EPS compounding for 5+ years. Consider using the
+              {' '}<strong>📉 5Y Median −15%</strong> exit multiple and a conservative growth rate to stress-test the thesis.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Main Two-Column Layout: Assumptions & Key Results */}
       <div style={{
