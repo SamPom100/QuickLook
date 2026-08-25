@@ -303,12 +303,54 @@ def get_data(ticker):
         q["psRatio"] = q_ps if (q_ps and 0 < q_ps < 100) else None
         q["fcfYield"] = q_fcf_yield if (q_fcf_yield and -50 < q_fcf_yield < 50) else None
 
+    # Historical EPS / Net Income CAGRs (1Y, 3Y, 5Y)
+    eps_growth_1y = None
+    eps_growth_3y = None
+    eps_growth_5y = None
+
+    if len(ni_raw) >= 8:
+        ni_prev1 = float(ni_raw[-8:-4].sum())
+        if ni_prev1 > 0 and ttm_ni > 0:
+            eps_growth_1y = round(((ttm_ni / ni_prev1) - 1.0) * 100.0, 1)
+
+    if len(ni_raw) >= 16:
+        ni_prev3 = float(ni_raw[-16:-12].sum())
+        if ni_prev3 > 0 and ttm_ni > 0:
+            eps_growth_3y = round(((ttm_ni / ni_prev3) ** (1.0 / 3.0) - 1.0) * 100.0, 1)
+
+    if len(ni_raw) >= 24:
+        ni_prev5 = float(ni_raw[-24:-20].sum())
+        if ni_prev5 > 0 and ttm_ni > 0:
+            eps_growth_5y = round(((ttm_ni / ni_prev5) ** (1.0 / 5.0) - 1.0) * 100.0, 1)
+
+    # 5-Year and 3-Year Valuation Multiples (Average Mean & Robust Median)
+    pe_history_5y = [q["peRatio"] for q in quarters[-20:] if q.get("peRatio") is not None]
+    avg_pe_5y = round(float(np.mean(pe_history_5y)), 1) if pe_history_5y else None
+    median_pe_5y = round(float(np.median(pe_history_5y)), 1) if pe_history_5y else None
+    
+    pe_history_3y = [q["peRatio"] for q in quarters[-12:] if q.get("peRatio") is not None]
+    avg_pe_3y = round(float(np.mean(pe_history_3y)), 1) if pe_history_3y else None
+    median_pe_3y = round(float(np.median(pe_history_3y)), 1) if pe_history_3y else None
+
+    # 5-Year Average Revenue YoY Growth %
+    rev_growth_5y = [q["yoyRevenueGrowth"] for q in quarters[-20:] if q.get("yoyRevenueGrowth") is not None]
+    avg_rev_growth_5y = round(float(np.mean(rev_growth_5y)), 1) if rev_growth_5y else None
+
     kpis = {
         "latestPrice": round(latest_price, 2),
         "ttmRevenue": round(ttm_rev / divisor, 2),
         "ttmFreeCashFlow": round(ttm_fcf / divisor, 2),
         "ttmNetMargin": ttm_net_margin,
         "ttmPE": ttm_pe,
+        "epsTTM": round(eps_ttm, 2),
+        "epsGrowth1Y": eps_growth_1y,
+        "epsGrowth3Y": eps_growth_3y,
+        "epsGrowth5Y": eps_growth_5y,
+        "avgPE5Y": avg_pe_5y,
+        "medianPE5Y": median_pe_5y,
+        "avgPE3Y": avg_pe_3y,
+        "medianPE3Y": median_pe_3y,
+        "avgRevGrowth5Y": avg_rev_growth_5y,
         "unitSuffix": unit_suffix,
     }
 

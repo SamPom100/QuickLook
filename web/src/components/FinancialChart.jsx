@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
+import DCFCalculator from './DCFCalculator';
 
 const CASH_METRICS = [
   { key: 'revenue',      label: 'Revenue',        color: 'rgb(31, 119, 180)',  widthFrac: 1.0,  type: 'bar' },
@@ -46,7 +47,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
   const svgRef = useRef(null);
   const tooltipRef = useRef(null);
 
-  const [activeTab, setActiveTab] = useState('cash'); // 'cash', 'margins', or 'growth'
+  const [activeTab, setActiveTab] = useState('cash'); // 'cash', 'valuation', 'growth', or 'dcf'
   const [dimensions, setDimensions] = useState({ width: 1400, height: 750 });
   const [hidden, setHidden] = useState(new Set());
 
@@ -59,10 +60,10 @@ export default function FinancialChart({ data, onSelectTicker }) {
     });
   };
 
-  let currentLegendItems;
+  let currentLegendItems = [];
   if (activeTab === 'cash') currentLegendItems = CASH_LEGEND_ITEMS;
   else if (activeTab === 'valuation') currentLegendItems = VALUATION_LEGEND_ITEMS;
-  else currentLegendItems = INDEX_LEGEND_ITEMS;
+  else if (activeTab === 'growth') currentLegendItems = INDEX_LEGEND_ITEMS;
 
   // Responsive resize — fill viewport
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
 
   // D3 rendering
   useEffect(() => {
-    if (!data || !svgRef.current) return;
+    if (!data || !svgRef.current || activeTab === 'dcf') return;
 
     const { quarters, stockPrices, ticker, kpis } = data;
     const numQ = quarters.length;
@@ -755,7 +756,7 @@ export default function FinancialChart({ data, onSelectTicker }) {
       )}
 
       {/* View Mode Switcher Tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveTab('cash')}
           style={{
@@ -789,133 +790,151 @@ export default function FinancialChart({ data, onSelectTicker }) {
         >
           🚀 Relative Growth (% Return)
         </button>
+        <button
+          onClick={() => setActiveTab('dcf')}
+          style={{
+            ...tabButtonStyle,
+            background: activeTab === 'dcf' ? '#0284c7' : '#f0f0f0',
+            color: activeTab === 'dcf' ? '#fff' : '#444',
+            fontWeight: activeTab === 'dcf' ? '700' : '500',
+            border: activeTab === 'dcf' ? '1px solid #0284c7' : '1px solid #ccc',
+          }}
+        >
+          🎯 DCF Valuation Calculator
+        </button>
       </div>
 
-      {/* Interactive Legend Toggle Toolbar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        flexWrap: 'wrap',
-        background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        borderRadius: 8,
-        padding: '8px 14px',
-        marginBottom: 12,
-      }}>
-        <span style={{
-          fontSize: 12,
-          fontWeight: '700',
-          color: '#475569',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          marginRight: 2,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          👁️ Toggle Series:
-        </span>
-        {currentLegendItems.map((item) => {
-          const isHidden = hidden.has(item.key);
-          const borderColor = isHidden ? '#cbd5e1' : (item.color === '#000' ? '#334155' : item.color);
-          return (
-            <button
-              key={item.key}
-              onClick={() => toggleSeries(item.key)}
-              title={isHidden ? `Click to show ${item.label}` : `Click to hide ${item.label}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 7,
-                background: isHidden ? '#f1f5f9' : '#fff',
-                border: `1.5px ${isHidden ? 'dashed' : 'solid'} ${borderColor}`,
-                borderRadius: 6,
-                padding: '4px 11px',
-                fontSize: 12,
-                fontWeight: isHidden ? '500' : '600',
-                color: isHidden ? '#94a3b8' : '#1e293b',
-                cursor: 'pointer',
-                opacity: isHidden ? 0.6 : 1,
-                textDecoration: isHidden ? 'line-through' : 'none',
-                transition: 'all 0.15s ease',
-                boxShadow: isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
-                outline: 'none',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)';
-              }}
-            >
-              {/* Swatch Icon */}
-              {item.type === 'bar' && (
-                <span style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 2,
-                  background: isHidden ? '#94a3b8' : item.color,
-                  display: 'inline-block',
-                }} />
-              )}
-              {item.type === 'dotted' && (
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 2,
-                }}>
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
-                </span>
-              )}
-              {item.type === 'line' && (
-                <span style={{
-                  width: 14,
-                  height: 3,
-                  borderRadius: 1,
-                  background: isHidden ? '#94a3b8' : item.color,
-                  display: 'inline-block',
-                }} />
-              )}
-              <span>{item.label}</span>
-              {isHidden && (
-                <span style={{
-                  fontSize: 10,
-                  color: '#ef4444',
-                  fontWeight: '700',
-                  textDecoration: 'none',
-                  marginLeft: 2,
-                }}>
-                  (hidden)
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {activeTab === 'dcf' ? (
+        <DCFCalculator data={data} />
+      ) : (
+        <>
+          {/* Interactive Legend Toggle Toolbar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            padding: '8px 14px',
+            marginBottom: 12,
+          }}>
+            <span style={{
+              fontSize: 12,
+              fontWeight: '700',
+              color: '#475569',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              marginRight: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              👁️ Toggle Series:
+            </span>
+            {currentLegendItems.map((item) => {
+              const isHidden = hidden.has(item.key);
+              const borderColor = isHidden ? '#cbd5e1' : (item.color === '#000' ? '#334155' : item.color);
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => toggleSeries(item.key)}
+                  title={isHidden ? `Click to show ${item.label}` : `Click to hide ${item.label}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    background: isHidden ? '#f1f5f9' : '#fff',
+                    border: `1.5px ${isHidden ? 'dashed' : 'solid'} ${borderColor}`,
+                    borderRadius: 6,
+                    padding: '4px 11px',
+                    fontSize: 12,
+                    fontWeight: isHidden ? '500' : '600',
+                    color: isHidden ? '#94a3b8' : '#1e293b',
+                    cursor: 'pointer',
+                    opacity: isHidden ? 0.6 : 1,
+                    textDecoration: isHidden ? 'line-through' : 'none',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                    outline: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = isHidden ? 'none' : '0 1px 2px rgba(0,0,0,0.05)';
+                  }}
+                >
+                  {/* Swatch Icon */}
+                  {item.type === 'bar' && (
+                    <span style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 2,
+                      background: isHidden ? '#94a3b8' : item.color,
+                      display: 'inline-block',
+                    }} />
+                  )}
+                  {item.type === 'dotted' && (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}>
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: isHidden ? '#94a3b8' : item.color }} />
+                    </span>
+                  )}
+                  {item.type === 'line' && (
+                    <span style={{
+                      width: 14,
+                      height: 3,
+                      borderRadius: 1,
+                      background: isHidden ? '#94a3b8' : item.color,
+                      display: 'inline-block',
+                    }} />
+                  )}
+                  <span>{item.label}</span>
+                  {isHidden && (
+                    <span style={{
+                      fontSize: 10,
+                      color: '#ef4444',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                      marginLeft: 2,
+                    }}>
+                      (hidden)
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-      <svg ref={svgRef} />
-      <div
-        ref={tooltipRef}
-        style={{
-          position: 'fixed',
-          opacity: 0,
-          background: 'rgba(10,10,10,0.92)',
-          color: '#eee',
-          padding: '10px 14px',
-          borderRadius: 6,
-          fontSize: 13,
-          lineHeight: 1.6,
-          pointerEvents: 'none',
-          zIndex: 1000,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-        }}
-      />
+          <svg ref={svgRef} />
+          <div
+            ref={tooltipRef}
+            style={{
+              position: 'fixed',
+              opacity: 0,
+              background: 'rgba(10,10,10,0.92)',
+              color: '#eee',
+              padding: '10px 14px',
+              borderRadius: 6,
+              fontSize: 13,
+              lineHeight: 1.6,
+              pointerEvents: 'none',
+              zIndex: 1000,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

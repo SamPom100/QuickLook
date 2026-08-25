@@ -18,11 +18,14 @@ Historical P/E Ratio, P/S Ratio, and Free Cash Flow Yield tracking over time alo
 Rebased percentage growth curves starting at `0% Baseline` to compare fundamental performance directly against share price returns.
 ![Tab 3 - Relative Growth](docs/tab3_relative_growth.png)
 
+### 4. 🎯 DCF Valuation Calculator
+Interactive valuation model projecting 5-Year / 10-Year compounding returns. Displays target entry buy prices across hurdle rates (8%, 10%, 12%, 15%, 20%), expected annual return (CAGR) from today's price, visual compounding trajectory graph, and a growth rate vs exit multiple sensitivity heatmap.
+
 ---
 
 ## 🌟 Key Features
 
-* 📊 **Multi-Tab Visualization:** Instantly toggle between Cash & Earnings, Valuation History, and Relative Growth Return.
+* 📊 **Multi-Tab Visualization:** Instantly toggle between Cash & Earnings, Valuation History, Relative Growth Return, and DCF Valuation.
 * 🏷️ **Interactive Competitor Benchmarks:** Clickable peer ticker pills (e.g. `AAPL`, `GOOGL`, `AMZN`, `ORCL`) to compare P/E ratios and switch target companies instantly.
 * 🎯 **Dynamic Tooltips & Guidelines:** High-precision crosshairs, explicit zero baselines, and complete dollar/percentage breakdowns on hover.
 * ⚡ **Optimized Parallel Data Engine:** Concurrent API fetching (`ThreadPoolExecutor`) and disk caching (`financial_cache.db`) for sub-second reloads.
