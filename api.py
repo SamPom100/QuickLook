@@ -193,9 +193,12 @@ def get_data(ticker):
         ni = float(ni_raw[i])
         fcf = float(fcf_raw[i])
 
+        opex = (gp - op) if (gp > 0 and op != 0) else (rev - op if (rev > 0 and op != 0) else 0.0)
         gm_pct = round((gp / rev * 100), 2) if rev > 0 else 0.0
         om_pct = round((op / rev * 100), 2) if rev > 0 else 0.0
         nm_pct = round((ni / rev * 100), 2) if rev > 0 else 0.0
+        fcf_conversion = round((fcf / ni * 100), 1) if (ni > 0 and fcf != 0) else None
+        fcf_margin = round((fcf / rev * 100), 1) if rev > 0 else 0.0
 
         yoy_rev = None
         if i >= 4 and rev_raw[i - 4] > 0:
@@ -205,12 +208,15 @@ def get_data(ticker):
             "date": row["dt"].strftime("%Y-%m-%d"),
             "revenue": round(rev / divisor, 2),
             "grossProfit": round(gp / divisor, 2),
+            "operatingExpenses": round(max(0.0, opex) / divisor, 2),
             "operatingIncome": round(op / divisor, 2),
             "netIncome": round(ni / divisor, 2),
             "freeCashFlow": round(fcf / divisor, 2),
             "grossMarginPct": gm_pct,
             "operatingMarginPct": om_pct,
             "netMarginPct": nm_pct,
+            "fcfConversionPct": fcf_conversion,
+            "fcfMarginPct": fcf_margin,
             "yoyRevenueGrowth": yoy_rev,
         })
 
@@ -243,14 +249,20 @@ def get_data(ticker):
             latest_price = float(prices[-1])
     # Calculate TTM summary KPIs
     ttm_rev = float(rev_raw[-4:].sum()) if len(rev_raw) >= 4 else float(rev_raw.sum())
+    ttm_gp = float(gp_raw[-4:].sum()) if len(gp_raw) >= 4 else float(gp_raw.sum())
+    ttm_op = float(op_raw[-4:].sum()) if len(op_raw) >= 4 else float(op_raw.sum())
     ttm_ni = float(ni_raw[-4:].sum()) if len(ni_raw) >= 4 else float(ni_raw.sum())
     ttm_fcf = float(fcf_raw[-4:].sum()) if len(fcf_raw) >= 4 else float(fcf_raw.sum())
+    ttm_gross_margin = round((ttm_gp / ttm_rev * 100), 2) if ttm_rev > 0 else 0.0
+    ttm_op_margin = round((ttm_op / ttm_rev * 100), 2) if ttm_rev > 0 else 0.0
     ttm_net_margin = round((ttm_ni / ttm_rev * 100), 2) if ttm_rev > 0 else 0.0
+    ttm_fcf_conversion = round((ttm_fcf / ttm_ni * 100), 1) if ttm_ni > 0 else None
 
     shares = get_shares_outstanding(ticker, latest_price)
 
     eps_ttm = (ttm_ni / shares) if shares > 0 else 0.0
     ttm_pe = round(latest_price / eps_ttm, 2) if eps_ttm > 0 else 0.0
+    ttm_ps = round((latest_price * shares) / ttm_rev, 2) if (shares > 0 and ttm_rev > 0) else 0.0
 
     # Historical Valuation Ratios per quarter (P/E, P/S, FCF Yield)
     q_dates = df["dt"].values
@@ -375,8 +387,12 @@ def get_data(ticker):
         "latestPrice": round(latest_price, 2),
         "ttmRevenue": round(ttm_rev / divisor, 2),
         "ttmFreeCashFlow": round(ttm_fcf / divisor, 2),
+        "ttmGrossMargin": ttm_gross_margin,
+        "ttmOperatingMargin": ttm_op_margin,
         "ttmNetMargin": ttm_net_margin,
         "ttmPE": ttm_pe,
+        "ttmPS": ttm_ps,
+        "ttmFcfConversion": ttm_fcf_conversion,
         "epsTTM": round(eps_ttm, 2),
         "epsGrowth1Y": eps_growth_1y,
         "epsGrowth3Y": eps_growth_3y,

@@ -2,12 +2,55 @@ import React, { useState, useMemo } from 'react';
 import SparkCard from './SparkCard';
 import { MONOKAI } from './theme';
 
+function SectionHeader({ num, title, subtitle, color }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 14,
+      paddingBottom: 8,
+      borderBottom: `1px solid ${MONOKAI.borderSubtle}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{
+          display: 'inline-block',
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: color,
+          boxShadow: `0 0 8px ${color}88`,
+        }} />
+        <span style={{
+          fontFamily: MONOKAI.monoFont,
+          fontSize: 13,
+          fontWeight: 700,
+          color: MONOKAI.text,
+          letterSpacing: '0.04em',
+        }}>
+          {num} // {title}
+        </span>
+      </div>
+      <span style={{
+        fontFamily: MONOKAI.monoFont,
+        fontSize: 11,
+        color: MONOKAI.muted,
+      }}>
+        {subtitle}
+      </span>
+    </div>
+  );
+}
+
 export default function MonokaiDashboard({ data }) {
   const [timeframe, setTimeframe] = useState('5Y'); // '1Y', '3Y', '5Y', 'ALL'
 
   const rawQuarters = data?.quarters || [];
   const rawStockPrices = data?.stockPrices || [];
   const kpis = data?.kpis || {};
+  const unitSuffix = data?.unitSuffix || kpis.unitSuffix || 'B';
 
   // Slice data by timeframe
   const { quarters, stockPrices } = useMemo(() => {
@@ -37,7 +80,7 @@ export default function MonokaiDashboard({ data }) {
     return { quarters: qSlice, stockPrices: sSlice };
   }, [rawQuarters, rawStockPrices, timeframe]);
 
-  // Series data sets
+  // Downsampled stock prices series (~120 points for smooth scrubbing)
   const stockSeries = useMemo(() => {
     if (!stockPrices || stockPrices.length === 0) return [];
     const totalQ = rawQuarters.length || 1;
@@ -45,7 +88,6 @@ export default function MonokaiDashboard({ data }) {
     const endQDate = rawQuarters[rawQuarters.length - 1] ? new Date(rawQuarters[rawQuarters.length - 1].date).getTime() : Date.now();
     const totalSpanMs = Math.max(1, endQDate - startQDate);
 
-    // Downsample to ~120 points for smooth scrubbing
     const step = Math.max(1, Math.floor(stockPrices.length / 120));
     const sampled = [];
     for (let i = 0; i < stockPrices.length; i += step) {
@@ -73,24 +115,49 @@ export default function MonokaiDashboard({ data }) {
     return sampled;
   }, [stockPrices, rawQuarters]);
 
+  // Section 1: Valuation Series
+  const peSeries = useMemo(() => {
+    return quarters
+      .map((q) => ({ date: q.date, value: q.peRatio }))
+      .filter((d) => d.value != null && d.value > 0 && d.value <= 120);
+  }, [quarters]);
+
+  const psSeries = useMemo(() => {
+    return quarters
+      .map((q) => ({ date: q.date, value: q.psRatio }))
+      .filter((d) => d.value != null && d.value > 0 && d.value <= 60);
+  }, [quarters]);
+
+  // Section 2: Income Engine & Costs Series
   const revSeries = useMemo(() => {
     return quarters.map((q) => ({ date: q.date, value: q.revenue }));
+  }, [quarters]);
+
+  const gpSeries = useMemo(() => {
+    return quarters.map((q) => ({ date: q.date, value: q.grossProfit }));
+  }, [quarters]);
+
+  const opexSeries = useMemo(() => {
+    return quarters.map((q) => {
+      const opexVal = q.operatingExpenses != null
+        ? q.operatingExpenses
+        : Math.max(0, (q.grossProfit || 0) - (q.operatingIncome || 0));
+      return { date: q.date, value: Math.round(opexVal * 100) / 100 };
+    });
   }, [quarters]);
 
   const niSeries = useMemo(() => {
     return quarters.map((q) => ({ date: q.date, value: q.netIncome }));
   }, [quarters]);
 
-  const fcfSeries = useMemo(() => {
-    return quarters.map((q) => ({ date: q.date, value: q.freeCashFlow }));
-  }, [quarters]);
-
-  const epsSeries = useMemo(() => {
-    return quarters.map((q) => ({ date: q.date, value: q.epsTTM != null ? q.epsTTM : q.netIncome }));
-  }, [quarters]);
-
-  const peSeries = useMemo(() => {
-    return quarters.map((q) => ({ date: q.date, value: q.peRatio })).filter((d) => d.value != null && d.value > 0 && d.value <= 120);
+  // Section 3: Moat & Profitability Margins Series
+  const grossMarginSeries = useMemo(() => {
+    return quarters.map((q) => ({
+      date: q.date,
+      value: q.grossMarginPct != null
+        ? q.grossMarginPct
+        : (q.revenue ? Math.round((q.grossProfit / q.revenue) * 1000) / 10 : 0),
+    }));
   }, [quarters]);
 
   const opMarginSeries = useMemo(() => {
@@ -98,14 +165,47 @@ export default function MonokaiDashboard({ data }) {
       date: q.date,
       value: q.operatingMarginPct != null
         ? q.operatingMarginPct
-        : (q.revenue ? Math.round((q.operatingIncome / q.revenue) * 1000) / 10 : 0)
+        : (q.revenue ? Math.round((q.operatingIncome / q.revenue) * 1000) / 10 : 0),
     }));
+  }, [quarters]);
+
+  const netMarginSeries = useMemo(() => {
+    return quarters.map((q) => ({
+      date: q.date,
+      value: q.netMarginPct != null
+        ? q.netMarginPct
+        : (q.revenue ? Math.round((q.netIncome / q.revenue) * 1000) / 10 : 0),
+    }));
+  }, [quarters]);
+
+  const epsSeries = useMemo(() => {
+    return quarters.map((q) => ({
+      date: q.date,
+      value: q.epsTTM != null ? q.epsTTM : q.netIncome,
+    }));
+  }, [quarters]);
+
+  // Section 4: Owner Earnings & Cash Series
+  const fcfSeries = useMemo(() => {
+    return quarters.map((q) => ({ date: q.date, value: q.freeCashFlow }));
+  }, [quarters]);
+
+  const fcfConversionSeries = useMemo(() => {
+    return quarters
+      .map((q) => {
+        let val = q.fcfConversionPct;
+        if (val == null && q.netIncome && q.netIncome > 0 && q.freeCashFlow != null) {
+          val = Math.round((q.freeCashFlow / q.netIncome) * 1000) / 10;
+        }
+        return { date: q.date, value: val };
+      })
+      .filter((d) => d.value != null && d.value >= -50 && d.value <= 300);
   }, [quarters]);
 
   const yoyRevGrowthSeries = useMemo(() => {
     return quarters.map((q) => ({
       date: q.date,
-      value: q.yoyRevenueGrowth != null ? q.yoyRevenueGrowth : 0
+      value: q.yoyRevenueGrowth != null ? q.yoyRevenueGrowth : 0,
     }));
   }, [quarters]);
 
@@ -115,9 +215,16 @@ export default function MonokaiDashboard({ data }) {
   const prevPrice = stockPrices.length >= 2 ? (stockPrices[0].y != null ? stockPrices[0].y : stockPrices[0].value) : currentPrice;
   const stockReturnPct = prevPrice > 0 ? ((currentPrice - prevPrice) / prevPrice) * 100 : 0;
 
+  const latestOpEx = latestQ.operatingExpenses != null
+    ? latestQ.operatingExpenses
+    : Math.max(0, (latestQ.grossProfit || 0) - (latestQ.operatingIncome || 0));
+  const opexPctOfRev = latestQ.revenue && latestQ.revenue > 0
+    ? ((latestOpEx / latestQ.revenue) * 100).toFixed(1)
+    : null;
+
   return (
     <div style={{ width: '100%' }}>
-      {/* Timeframe Bar */}
+      {/* Timeframe Control Bar */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -128,7 +235,7 @@ export default function MonokaiDashboard({ data }) {
         border: `1px solid ${MONOKAI.border}`,
         borderRadius: 8,
         padding: '10px 18px',
-        marginBottom: 18,
+        marginBottom: 24,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
@@ -173,115 +280,254 @@ export default function MonokaiDashboard({ data }) {
         </span>
       </div>
 
-      {/* 8-Card Robinhood Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: 16,
-      }}>
-        {/* 1. Stock Price */}
-        <SparkCard
-          title="Stock Price"
-          currentValue={`$${currentPrice.toFixed(2)}`}
-          badgeText={`${stockReturnPct >= 0 ? '+' : ''}${stockReturnPct.toFixed(1)}% (${timeframe})`}
-          badgePositive={stockReturnPct >= 0}
-          dataPoints={stockSeries}
-          color={stockReturnPct >= 0 ? MONOKAI.green : MONOKAI.pink}
-          formatValue={(v) => `$${v.toFixed(2)}`}
-          height={95}
-          sublabel="Latest Close"
-        />
-
-        {/* 2. Quarterly Revenue */}
-        <SparkCard
-          title="Quarterly Revenue"
-          currentValue={`$${(latestQ.revenue || 0).toFixed(2)}B`}
-          badgeText={latestQ.yoyRevenueGrowth ? `+${latestQ.yoyRevenueGrowth.toFixed(1)}% YoY` : null}
-          badgePositive={true}
-          dataPoints={revSeries}
-          color={MONOKAI.cyan}
-          formatValue={(v) => `$${v.toFixed(2)}B`}
-          height={95}
-          sublabel={latestQ.date}
-        />
-
-        {/* 3. Net Income */}
-        <SparkCard
-          title="Net Income"
-          currentValue={`$${(latestQ.netIncome || 0).toFixed(2)}B`}
-          badgeText={latestQ.netMarginPct ? `${latestQ.netMarginPct.toFixed(1)}% Margin` : null}
-          badgePositive={(latestQ.netIncome || 0) >= 0}
-          dataPoints={niSeries}
-          color={MONOKAI.green}
-          formatValue={(v) => `$${v.toFixed(2)}B`}
-          height={95}
-          sublabel={latestQ.date}
-        />
-
-        {/* 4. Free Cash Flow */}
-        <SparkCard
-          title="Free Cash Flow"
-          currentValue={`$${(latestQ.freeCashFlow || 0).toFixed(2)}B`}
-          badgeText={kpis.fcfYield ? `${kpis.fcfYield.toFixed(1)}% Yield` : 'Operating Cash'}
-          badgePositive={(latestQ.freeCashFlow || 0) >= 0}
-          dataPoints={fcfSeries}
-          color={MONOKAI.yellow}
-          formatValue={(v) => `$${v.toFixed(2)}B`}
-          height={95}
-          sublabel={latestQ.date}
-        />
-
-        {/* 5. EPS (TTM) */}
-        <SparkCard
-          title="EPS (TTM)"
-          currentValue={`$${(latestQ.epsTTM || kpis.epsTTM || 0).toFixed(2)}`}
-          badgeText={kpis.epsGrowth5Y ? `${kpis.epsGrowth5Y.toFixed(1)}% 5Y CAGR` : null}
-          badgePositive={(kpis.epsGrowth5Y || 0) >= 0}
-          dataPoints={epsSeries}
-          color={MONOKAI.orange}
-          formatValue={(v) => `$${v.toFixed(2)}`}
-          height={95}
-          sublabel={latestQ.date}
-        />
-
-        {/* 6. P/E Multiple (TTM) */}
-        <SparkCard
-          title="P/E Multiple (TTM)"
-          currentValue={latestQ.peRatio ? `${latestQ.peRatio.toFixed(1)}x` : (kpis.ttmPE ? `${kpis.ttmPE.toFixed(1)}x` : '—')}
-          badgeText={kpis.medianPE5YClean ? `5Y Med ${kpis.medianPE5YClean.toFixed(1)}x` : null}
-          badgePositive={true}
-          dataPoints={peSeries}
+      {/* ============================================================ */}
+      {/* SECTION 1: VALUATION & MARKET SENTIMENT                       */}
+      {/* ============================================================ */}
+      <div style={{ marginBottom: 32 }}>
+        <SectionHeader
+          num="01"
+          title="VALUATION & MARKET SENTIMENT"
+          subtitle="Pricing dynamics, multiple expansion/contraction & market valuation"
           color={MONOKAI.purple}
-          formatValue={(v) => `${v.toFixed(1)}x`}
-          height={95}
-          sublabel={latestQ.date}
         />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 16,
+        }}>
+          {/* Stock Price */}
+          <SparkCard
+            title="Stock Price"
+            currentValue={`$${currentPrice.toFixed(2)}`}
+            badgeText={`${stockReturnPct >= 0 ? '+' : ''}${stockReturnPct.toFixed(1)}% (${timeframe})`}
+            badgePositive={stockReturnPct >= 0}
+            dataPoints={stockSeries}
+            color={stockReturnPct >= 0 ? MONOKAI.green : MONOKAI.pink}
+            formatValue={(v) => `$${v.toFixed(2)}`}
+            height={95}
+            sublabel="Latest Close"
+          />
 
-        {/* 7. Operating Margin */}
-        <SparkCard
-          title="Operating Margin"
-          currentValue={latestQ.operatingMarginPct ? `${latestQ.operatingMarginPct.toFixed(1)}%` : '—'}
-          badgeText="Op Efficiency"
-          badgePositive={true}
-          dataPoints={opMarginSeries}
+          {/* P/E Multiple */}
+          <SparkCard
+            title="P/E Multiple (TTM)"
+            currentValue={latestQ.peRatio ? `${latestQ.peRatio.toFixed(1)}x` : (kpis.ttmPE ? `${kpis.ttmPE.toFixed(1)}x` : '—')}
+            badgeText={kpis.medianPE5YClean ? `5Y Med ${kpis.medianPE5YClean.toFixed(1)}x` : null}
+            badgePositive={true}
+            dataPoints={peSeries}
+            color={MONOKAI.purple}
+            formatValue={(v) => `${v.toFixed(1)}x`}
+            height={95}
+            sublabel="Price / Earnings"
+          />
+
+          {/* P/S Multiple */}
+          <SparkCard
+            title="P/S Multiple (TTM)"
+            currentValue={latestQ.psRatio ? `${latestQ.psRatio.toFixed(1)}x` : (kpis.ttmPS ? `${kpis.ttmPS.toFixed(1)}x` : '—')}
+            badgeText="Price / Sales"
+            badgePositive={true}
+            dataPoints={psSeries}
+            color={MONOKAI.cyan}
+            formatValue={(v) => `${v.toFixed(1)}x`}
+            height={95}
+            sublabel="Top-line Valuation"
+          />
+        </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SECTION 2: THE INCOME ENGINE & COST DISCIPLINE                */}
+      {/* ============================================================ */}
+      <div style={{ marginBottom: 32 }}>
+        <SectionHeader
+          num="02"
+          title="THE INCOME ENGINE & COST DISCIPLINE"
+          subtitle="Top-line sales, direct production costs, OpEx overhead & bottom-line take"
           color={MONOKAI.cyan}
-          formatValue={(v) => `${v.toFixed(1)}%`}
-          height={95}
-          sublabel={latestQ.date}
         />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 16,
+        }}>
+          {/* Quarterly Revenue */}
+          <SparkCard
+            title="Quarterly Revenue"
+            currentValue={`$${(latestQ.revenue || 0).toFixed(2)}${unitSuffix}`}
+            badgeText={latestQ.yoyRevenueGrowth ? `+${latestQ.yoyRevenueGrowth.toFixed(1)}% YoY` : null}
+            badgePositive={true}
+            dataPoints={revSeries}
+            color={MONOKAI.cyan}
+            formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
+            height={95}
+            sublabel={latestQ.date}
+          />
 
-        {/* 8. YoY Revenue Growth */}
-        <SparkCard
-          title="YoY Revenue Growth"
-          currentValue={latestQ.yoyRevenueGrowth ? `${latestQ.yoyRevenueGrowth.toFixed(1)}%` : '—'}
-          badgeText={kpis.avgRevGrowth5Y ? `5Y Avg ${kpis.avgRevGrowth5Y.toFixed(1)}%` : null}
-          badgePositive={(latestQ.yoyRevenueGrowth || 0) >= 0}
-          dataPoints={yoyRevGrowthSeries}
-          color={MONOKAI.orange}
-          formatValue={(v) => `${v.toFixed(1)}%`}
-          height={95}
-          sublabel={latestQ.date}
+          {/* Gross Profit */}
+          <SparkCard
+            title="Gross Profit"
+            currentValue={`$${(latestQ.grossProfit || 0).toFixed(2)}${unitSuffix}`}
+            badgeText={latestQ.grossMarginPct ? `${latestQ.grossMarginPct.toFixed(1)}% Margin` : null}
+            badgePositive={true}
+            dataPoints={gpSeries}
+            color={MONOKAI.green}
+            formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
+            height={95}
+            sublabel="Rev - Direct Costs"
+          />
+
+          {/* Operating Expenses (OpEx) */}
+          <SparkCard
+            title="Operating Expenses"
+            currentValue={`$${latestOpEx.toFixed(2)}${unitSuffix}`}
+            badgeText={opexPctOfRev ? `${opexPctOfRev}% of Rev` : 'OpEx Overhead'}
+            badgePositive={false}
+            dataPoints={opexSeries}
+            color={MONOKAI.pink}
+            formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
+            height={95}
+            sublabel="SG&A + R&D"
+          />
+
+          {/* Net Income */}
+          <SparkCard
+            title="Net Income"
+            currentValue={`$${(latestQ.netIncome || 0).toFixed(2)}${unitSuffix}`}
+            badgeText={latestQ.netMarginPct ? `${latestQ.netMarginPct.toFixed(1)}% Net Margin` : null}
+            badgePositive={(latestQ.netIncome || 0) >= 0}
+            dataPoints={niSeries}
+            color={MONOKAI.green}
+            formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
+            height={95}
+            sublabel={latestQ.date}
+          />
+        </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SECTION 3: PROFITABILITY MOATS & MARGINS                     */}
+      {/* ============================================================ */}
+      <div style={{ marginBottom: 32 }}>
+        <SectionHeader
+          num="03"
+          title="PROFITABILITY MOATS & MARGINS"
+          subtitle="Buffett pricing power, operational efficiency (EBIT) & per-share earnings"
+          color={MONOKAI.yellow}
         />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 16,
+        }}>
+          {/* Gross Margin % */}
+          <SparkCard
+            title="Gross Margin"
+            currentValue={latestQ.grossMarginPct ? `${latestQ.grossMarginPct.toFixed(1)}%` : '—'}
+            badgeText="Pricing Power Moat"
+            badgePositive={true}
+            dataPoints={grossMarginSeries}
+            color={MONOKAI.yellow}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            height={95}
+            sublabel="Gross Profit / Rev"
+          />
+
+          {/* Operating Margin % */}
+          <SparkCard
+            title="Operating Margin"
+            currentValue={latestQ.operatingMarginPct ? `${latestQ.operatingMarginPct.toFixed(1)}%` : '—'}
+            badgeText="Damodaran Core EBIT"
+            badgePositive={true}
+            dataPoints={opMarginSeries}
+            color={MONOKAI.cyan}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            height={95}
+            sublabel="Operating Income / Rev"
+          />
+
+          {/* Net Margin % */}
+          <SparkCard
+            title="Net Margin"
+            currentValue={latestQ.netMarginPct ? `${latestQ.netMarginPct.toFixed(1)}%` : '—'}
+            badgeText="Bottom-Line Take"
+            badgePositive={(latestQ.netMarginPct || 0) >= 0}
+            dataPoints={netMarginSeries}
+            color={MONOKAI.green}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            height={95}
+            sublabel="Net Income / Rev"
+          />
+
+          {/* EPS (TTM) */}
+          <SparkCard
+            title="EPS (TTM)"
+            currentValue={`$${(latestQ.epsTTM || kpis.epsTTM || 0).toFixed(2)}`}
+            badgeText={kpis.epsGrowth5Y ? `${kpis.epsGrowth5Y.toFixed(1)}% 5Y CAGR` : null}
+            badgePositive={(kpis.epsGrowth5Y || 0) >= 0}
+            dataPoints={epsSeries}
+            color={MONOKAI.orange}
+            formatValue={(v) => `$${v.toFixed(2)}`}
+            height={95}
+            sublabel="Diluted Per Share"
+          />
+        </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SECTION 4: OWNER EARNINGS & CASH GENERATION                  */}
+      {/* ============================================================ */}
+      <div style={{ marginBottom: 24 }}>
+        <SectionHeader
+          num="04"
+          title="OWNER EARNINGS & CASH GENERATION"
+          subtitle="Buffett surplus cash after CapEx, earnings-to-cash conversion & growth velocity"
+          color={MONOKAI.green}
+        />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 16,
+        }}>
+          {/* Free Cash Flow */}
+          <SparkCard
+            title="Free Cash Flow"
+            currentValue={`$${(latestQ.freeCashFlow || 0).toFixed(2)}${unitSuffix}`}
+            badgeText={kpis.fcfYield ? `${kpis.fcfYield.toFixed(1)}% Yield` : 'Buffett Owner Earnings'}
+            badgePositive={(latestQ.freeCashFlow || 0) >= 0}
+            dataPoints={fcfSeries}
+            color={MONOKAI.yellow}
+            formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
+            height={95}
+            sublabel={latestQ.date}
+          />
+
+          {/* FCF Conversion % */}
+          <SparkCard
+            title="FCF Conversion %"
+            currentValue={latestQ.fcfConversionPct ? `${latestQ.fcfConversionPct.toFixed(1)}%` : (kpis.ttmFcfConversion ? `${kpis.ttmFcfConversion.toFixed(1)}%` : '—')}
+            badgeText="Cash Quality (FCF/NI)"
+            badgePositive={true}
+            dataPoints={fcfConversionSeries}
+            color={MONOKAI.green}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            height={95}
+            sublabel="Earnings to Cash Ratio"
+          />
+
+          {/* YoY Revenue Growth */}
+          <SparkCard
+            title="YoY Revenue Growth"
+            currentValue={latestQ.yoyRevenueGrowth ? `${latestQ.yoyRevenueGrowth.toFixed(1)}%` : '—'}
+            badgeText={kpis.avgRevGrowth5Y ? `5Y Avg ${kpis.avgRevGrowth5Y.toFixed(1)}%` : null}
+            badgePositive={(latestQ.yoyRevenueGrowth || 0) >= 0}
+            dataPoints={yoyRevGrowthSeries}
+            color={MONOKAI.orange}
+            formatValue={(v) => `${v.toFixed(1)}%`}
+            height={95}
+            sublabel="Top-line Velocity"
+          />
+        </div>
       </div>
     </div>
   );
