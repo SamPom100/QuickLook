@@ -83,46 +83,22 @@ def fetch_single_peer(p_sym: str) -> dict:
             p_price = float(val_df["Close"].iloc[-1])
         
         p_pe = "N/A"
-        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={p_sym_upper}&apikey=YOUR_ALPHA_KEY_0'
-        cached = cm.get_url_cache(url)
+        peer_cache_key = f'https://peer-info/{p_sym_upper}'
+        cached = cm.get_url_cache(peer_cache_key)
         
-        if cached and isinstance(cached, dict) and ("PERatio" in cached or "peRatio" in cached):
-            print(f"  ⚡ [CACHE HIT] Alpha Vantage: Peer Overview ({p_sym_upper})")
-            pe_val = cached.get('PERatio') or cached.get('peRatio')
-            if pe_val and pe_val != 'None' and pe_val != 'N/A':
-                p_pe = round(float(pe_val), 2)
+        if cached and isinstance(cached, dict) and "peRatio" in cached:
+            p_pe = cached.get("peRatio", "N/A")
         else:
-            # 1. Try Alpha Vantage live call first
-            got_pe = False
+            # Query Yahoo Finance directly with 0 rate limits
             try:
-                print(f"  🌐 [LIVE API CALL] Alpha Vantage: Peer Overview ({p_sym_upper})")
-                resp = requests.get(url, timeout=4)
-                overview = resp.json()
-                if isinstance(overview, dict) and "PERatio" in overview:
-                    pe_val = overview.get('PERatio')
-                    if pe_val and pe_val != 'None' and pe_val != 'N/A':
-                        p_pe = round(float(pe_val), 2)
-                        got_pe = True
-                    cm.save_url_cache(url, overview)
-                    print(f"  💾 [CACHE SAVED] Alpha Vantage: Peer Overview ({p_sym_upper})")
+                yf_t = yf.Ticker(p_sym_upper)
+                yf_info = yf_t.info or {}
+                pe_val = yf_info.get("trailingPE") or yf_info.get("forwardPE")
+                if pe_val and pe_val != "None":
+                    p_pe = round(float(pe_val), 2)
+                cm.save_url_cache(peer_cache_key, {"peRatio": p_pe})
             except Exception:
-                pass
-
-            # 2. Fallback to Yahoo Finance if Alpha Vantage was rate-limited / unavailable
-            if not got_pe:
-                try:
-                    print(f"  🌐 [LIVE API CALL] Yahoo Finance: Peer Info ({p_sym_upper})")
-                    yf_t = yf.Ticker(p_sym_upper)
-                    yf_info = yf_t.info or {}
-                    trailing_pe = yf_info.get("trailingPE") or yf_info.get("forwardPE")
-                    if trailing_pe:
-                        p_pe = round(float(trailing_pe), 2)
-                    # Cache the found PE to SQLite so it never fetches again
-                    cm.save_url_cache(url, {"PERatio": str(p_pe), "Symbol": p_sym_upper})
-                    print(f"  💾 [CACHE SAVED] Peer Overview ({p_sym_upper})")
-                except Exception:
-                    # Still cache the N/A to prevent repeated rate limit spam
-                    cm.save_url_cache(url, {"PERatio": "N/A", "Symbol": p_sym_upper})
+                cm.save_url_cache(peer_cache_key, {"peRatio": "N/A"})
 
         return {
             "ticker": p_sym_upper,
@@ -261,6 +237,7 @@ def get_data(ticker):
                 stock_prices.append({
                     "x": round(float(x), 4),
                     "y": round(float(p), 2),
+                    "date": d.strftime("%Y-%m-%d"),
                 })
         if len(prices) > 0:
             latest_price = float(prices[-1])
@@ -422,6 +399,10 @@ def get_data(ticker):
     if hasattr(service.provider, "was_throttled"):
         service.provider.was_throttled = False
 
+    # Only report notice if data failed to load; if we have full data from cache/fallbacks, do not alarm the user
+    has_full_data = len(quarters) >= 4
+    notice = "Alpha Vantage rate limit reached; partial data available." if (was_throttled and not has_full_data) else None
+
     return jsonify({
         "ticker": ticker,
         "unitLabel": unit_label,
@@ -431,7 +412,7 @@ def get_data(ticker):
         "kpis": kpis,
         "peers": peers_data,
         "isThrottled": was_throttled,
-        "notice": "Alpha Vantage free-tier rate limit (5 calls/min) was active; fallback data sources were used." if was_throttled else None,
+        "notice": notice,
     })
 
 
