@@ -17,25 +17,32 @@ export default function SparkCard({
   const [hoverIndex, setHoverIndex] = useState(null);
 
   // Compute SVG path & coordinates
-  const { pathData, areaData, points, minVal, maxVal } = useMemo(() => {
+  const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY } = useMemo(() => {
     const validData = (dataPoints || []).filter(
       (d) => d && d.value != null && !isNaN(Number(d.value)) && isFinite(Number(d.value))
     );
 
     if (validData.length < 2) {
-      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0 };
+      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null };
     }
 
     const vals = validData.map((d) => Number(d.value));
     const minVal = d3.min(vals) || 0;
     const maxVal = d3.max(vals) || 1;
-    const padding = (maxVal - minVal) * 0.1 || 1;
+    const hasNegative = minVal < 0;
+
+    // When there are negative values, ensure the Y domain includes 0
+    const domainMin = hasNegative ? Math.min(minVal, 0) : minVal;
+    const domainMax = hasNegative ? Math.max(maxVal, 0) : maxVal;
+    const padding = (domainMax - domainMin) * 0.1 || 1;
 
     const w = 300; // normalized width for viewBox
     const h = height;
 
     const xScale = d3.scaleLinear().domain([0, validData.length - 1]).range([4, w - 4]);
-    const yScale = d3.scaleLinear().domain([minVal - padding, maxVal + padding]).range([h - 6, 6]);
+    const yScale = d3.scaleLinear().domain([domainMin - padding, domainMax + padding]).range([h - 6, 6]);
+
+    const zeroY = hasNegative ? yScale(0) : null;
 
     const pts = validData.map((d, i) => ({
       x: xScale(i),
@@ -61,6 +68,8 @@ export default function SparkCard({
       points: pts,
       minVal,
       maxVal,
+      hasNegative,
+      zeroY,
     };
   }, [dataPoints, height]);
 
@@ -188,6 +197,20 @@ export default function SparkCard({
               <stop offset="100%" stopColor={color} stopOpacity={0.0} />
             </linearGradient>
           </defs>
+
+          {/* Dotted Zero Line for negative graphs */}
+          {hasNegative && zeroY !== null && (
+            <line
+              x1={0}
+              x2={300}
+              y1={zeroY}
+              y2={zeroY}
+              stroke={MONOKAI.muted}
+              strokeWidth={1}
+              strokeDasharray="3,3"
+              opacity={0.65}
+            />
+          )}
 
           {/* Area Fill */}
           {areaData && (
