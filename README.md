@@ -1,58 +1,74 @@
-# QuickLook Finance Dashboard
+# QuickLook // Financial Terminal v4
 
-A fast, interactive stock & financial performance dashboard built with **React**, **D3.js**, **Python (Flask)**, and **Alpha Vantage**.
+A high-performance, single-page financial terminal designed for investors and fundamental analysts. Built with **React**, **D3.js**, and **Python (Flask)** in a minimalist Monokai terminal aesthetic.
 
----
-
-## 📸 Dashboard Views
-
-### 1. 📊 Cash & Earnings (Revenue, FCF, Net Income vs Stock Price)
-Dual-pane visualization comparing quarterly Revenue, Net Income, Free Cash Flow, and 10-year stock price history.
-![Tab 1 - Cash & Earnings](docs/tab1_cash_earnings.png)
-
-### 2. 📈 Valuation History (P/E, P/S, FCF Yield & Stock Price)
-Historical P/E Ratio, P/S Ratio, and Free Cash Flow Yield tracking over time alongside share prices.
-![Tab 2 - Valuation History](docs/tab2_valuation_history.png)
-
-### 3. 🚀 Relative Growth (% Return since Start)
-Rebased percentage growth curves starting at `0% Baseline` to compare fundamental performance directly against share price returns.
-![Tab 3 - Relative Growth](docs/tab3_relative_growth.png)
-
-### 4. 🔬 DCF Historical Drivers (EPS, Growth %, P/E Ratio)
-Synchronized 3-panel valuation drivers view designed specifically to evaluate historical inputs for DCF modeling:
-* **Panel 1: 💵 EPS History ($ TTM)** — Trailing twelve months earning power progression.
-* **Panel 2: 🚀 EPS YoY Growth Rate (%)** — Quarter-by-quarter YoY growth trajectory with a `0% Baseline` and 5Y CAGR benchmark.
-* **Panel 3: 🏛️ Historical P/E Multiple (x)** — Multiple expansion/compression history with 5-Year Median P/E reference anchor.
-
-### 5. 🎯 DCF Valuation Calculator
-Interactive valuation model projecting 5-Year / 10-Year compounding returns. Displays target entry buy prices across hurdle rates (8%, 10%, 12%, 15%, 20%), expected annual return (CAGR) from today's price, visual compounding trajectory graph, and a growth rate vs exit multiple sensitivity heatmap.
+![QuickLook Terminal](docs/dashboard.png)
 
 ---
 
-## 🌟 Key Features
+## ⚡ Overview
 
-* 📊 **Multi-Tab Visualization:** Instantly toggle between Cash & Earnings, Valuation History, Relative Growth Return, DCF Historical Drivers, and DCF Valuation Calculator.
-* 🏷️ **Interactive Competitor Benchmarks:** Clickable peer ticker pills (e.g. `AAPL`, `GOOGL`, `AMZN`, `ORCL`) to compare P/E ratios and switch target companies instantly.
-* 🎯 **Dynamic Tooltips & Guidelines:** High-precision crosshairs, explicit zero baselines, and complete dollar/percentage breakdowns on hover.
-* ⚡ **Optimized Parallel Data Engine:** Concurrent API fetching (`ThreadPoolExecutor`) and disk caching (`financial_cache.db`) for sub-second reloads.
+QuickLook replaces cluttered multi-tab financial portals with a single, high-density fundamental analysis cockpit. Every card features interactive D3 sparklines with cursor scrubbing, reference baselines, and peer benchmarks.
+
+### 🏛️ The 4 Fundamental Pillars
+
+1. **01 Valuation & Industry Benchmarks**
+   - **Stock Price**: Historical trajectory, timeframe return percentage, and 52-week/5-year price range.
+   - **P/E Multiple**: Historical valuation multiple expansion/compression with **5-Year Median** and **Industry Median** baseline reference lines. Includes interactive peer competitor footers (e.g. `ORCL`, `PANW`, `CRWD`, `NOW`).
+   - **P/S Multiple**: Price-to-Sales valuation history with dynamic industry median anchors.
+
+2. **02 Income & Expenses**
+   - **Quarterly Revenue**: Top-line revenue progression with YoY growth rate callout.
+   - **Gross Profit**: Core profitability with gross margin badge.
+   - **Operating Expenses**: Operating cost discipline with OpEx % of Revenue tracking.
+   - **Net Income**: Bottom-line profit trajectory with net margin badge.
+
+3. **03 Margins & Efficiency**
+   - **Gross Margin (%)**, **Operating Margin (%)**, and **Net Margin (%)**: Multi-year margin expansion or compression trends.
+   - **EPS (TTM)**: Trailing twelve-month earnings power progression with 5-Year CAGR.
+
+4. **04 Cash Flow & Growth**
+   - **Free Cash Flow**: Real cash generated with FCF Yield benchmark.
+   - **FCF Conversion %**: Earnings quality ratio tracking cash conversion efficiency (FCF / Net Income).
+   - **YoY Revenue Growth**: Normalized quarter-over-quarter expansion rates with 5-Year historical average.
+
+---
+
+## 🌟 Core Highlights
+
+* **🎯 1:1 SVG Pixel Scrubbing**: Real-time cursor tracking on all charts with true circle markers, crisp 1px guidelines, and dynamic metric inspection on hover.
+* **🏢 Dynamic Industry Medians**: Queries industry constituent leaders on the fly via `yfinance.Industry` — zero hardcoding.
+* **🏷️ Competitor Discovery**: Automatic peer group discovery and sorting by market capitalization relevance via Finnhub.
+* **⚡ Fail-Fast & Fault Tolerance**:
+  - Validates ticker symbols in <100ms before querying data providers.
+  - Card-level error boundaries (`MonokaiErrorBoundary`) ensure that if any individual metric is missing or fails to calculate, a clean error card is displayed instead of a blank chart.
+* **🔒 Zero Secrets in Git**: Automated environment credential restoration from your private GitHub Gist upon cloning, keeping personal API keys completely out of public commits.
+* **💾 Resilient SQLite Caching**: Standardized local database caching (`cache/financial_cache.db`) ensures instant sub-second reloads without burning API quotas.
 
 ---
 
 ## 🚀 Quick Start
 
-Start both the backend API server (`http://127.0.0.1:5001`) and frontend app (`http://localhost:5173`) with a single command:
+### Prerequisites
+- Python 3.10+
+- Node.js & npm
+- (Optional) GitHub CLI (`gh`) for automated `.env` Gist synchronization
+
+### Running Locally
+
+Launch both the backend API server (`http://127.0.0.1:5001`) and frontend app (`http://localhost:5173`) with one command:
 
 ```bash
 ./start.sh
 ```
 
-> **Note:** Pressing `Ctrl+C` cleanly shuts down both frontend and backend processes simultaneously.
+> **Note:** Pressing `Ctrl+C` cleanly terminates both backend and frontend processes simultaneously.
 
 ---
 
 ## 🛠 Tech Stack
 
-* **Frontend:** React, D3.js, Vite, Vanilla CSS
-* **Backend:** Python 3, Flask, Pandas, NumPy, Requests
-* **Data Sources:** Alpha Vantage API (Quarterly Reports & Valuation)
-* **Storage & Caching:** SQLite Disk Cache (`cache/financial_cache.db`)
+* **Frontend:** React, D3.js, Vite, Monokai Design System
+* **Backend:** Python 3, Flask, Flask-CORS, Pandas, NumPy, Requests
+* **Data Providers:** Alpha Vantage API, Yahoo Finance (`yfinance`), Finnhub API
+* **Caching & Storage:** SQLite Disk Cache (`cache/financial_cache.db`)
