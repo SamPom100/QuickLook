@@ -4,8 +4,7 @@ import re
 from typing import List, Optional
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor
-
-FINNHUB_TOKEN = "YOUR_FINNHUB_TOKEN_000000000000000000000"
+from config import FINNHUB_TOKEN
 
 
 class FinnhubPeerService:
@@ -33,15 +32,16 @@ class FinnhubPeerService:
                 return cached
 
         # 2. Check raw Finnhub response cache
+        raw_cache_key = f"https://finnhub.io/api/v1/stock/peers?symbol={ticker_upper}"
         url = f"https://finnhub.io/api/v1/stock/peers?symbol={ticker_upper}&token={FINNHUB_TOKEN}"
         raw_peers = None
         if cache_manager:
-            cached_raw = cache_manager.get_url_cache(url)
+            cached_raw = cache_manager.get_url_cache(raw_cache_key) or cache_manager.get_url_cache(url)
             if cached_raw:
                 raw_peers = cached_raw
 
         # 3. Live Finnhub API Fetch if not in cache
-        if not raw_peers:
+        if not raw_peers and FINNHUB_TOKEN:
             print(f"  🌐 [LIVE API CALL] Finnhub: Competitor Peers ({ticker_upper})")
             try:
                 resp = requests.get(url, timeout=5)
@@ -49,7 +49,7 @@ class FinnhubPeerService:
                     raw_peers = resp.json()
                     if isinstance(raw_peers, list) and len(raw_peers) > 0:
                         if cache_manager:
-                            cache_manager.save_url_cache(url, raw_peers)
+                            cache_manager.save_url_cache(raw_cache_key, raw_peers)
                             print(f"  💾 [CACHE SAVED] Finnhub: Competitor Peers ({ticker_upper})")
             except Exception as e:
                 print(f"  ⚠️ [API ERROR] Finnhub Peer Fetch for {ticker_upper}: {e}")

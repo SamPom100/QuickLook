@@ -6,6 +6,18 @@ cd "$(dirname "$0")"
 # Raise file descriptor limit on macOS to prevent Errno 24 (Too many open files)
 ulimit -n 4096 2>/dev/null || true
 
+# Auto-restore .env from private GitHub Gist if missing (for seamless fresh clones)
+if [ ! -f ".env" ]; then
+    GIST_ID="81b78f3b76d8ad1d597f88eb208a7bde"
+    if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+        echo "  🔑 Restoring .env from private GitHub Gist..."
+        gh gist view "$GIST_ID" -f .env -r > .env 2>/dev/null || true
+    fi
+    if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+        cp .env.example .env
+    fi
+fi
+
 # Clean shutdown handler
 cleanup() {
     echo ""

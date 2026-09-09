@@ -6,17 +6,16 @@ from .base_provider import BaseDataProvider
 from .models import CompanyOverview, FinancialStatement
 from .ratio_engine import RatioEngine
 from .cache_manager import CacheManager
+from config import ALPHAVANTAGE_KEY
 
 
 class AlphaVantageProvider(BaseDataProvider):
     """
-    Alpha Vantage Data Provider using user's API key.
-    100% URL Caching: Caches every raw HTTP request to Alpha Vantage in SQLite
-    so repeat calls NEVER consume API quota.
+    Alpha Vantage Data Provider with SQLite caching.
     """
 
-    def __init__(self, api_key: str = "YOUR_ALPHA_KEY_0", cache_manager: Optional[CacheManager] = None):
-        self.api_key = api_key
+    def __init__(self, api_key: Optional[str] = None, cache_manager: Optional[CacheManager] = None):
+        self.api_key = api_key or ALPHAVANTAGE_KEY
         self.cache = cache_manager or CacheManager()
 
     def _fetch_url(self, url: str, label: str = "") -> Dict[str, Any]:
@@ -25,7 +24,8 @@ class AlphaVantageProvider(BaseDataProvider):
         If URL was fetched before, returns cached JSON instantly without network call.
         """
         tag = label or url.split("&apikey=")[0]
-        cached = self.cache.get_url_cache(url)
+        cache_key = url.split("&apikey=")[0].split("&token=")[0]
+        cached = self.cache.get_url_cache(cache_key) or self.cache.get_url_cache(url)
         if cached:
             print(f"  ⚡ [CACHE HIT] {tag}")
             return cached
@@ -38,7 +38,7 @@ class AlphaVantageProvider(BaseDataProvider):
                 print(f"  ⏳ [THROTTLED] Alpha Vantage rate limit reached for {tag}")
             # Only cache valid responses (not rate-limit messages or errors)
             if data and "Error Message" not in data and "Information" not in data and "Note" not in data:
-                self.cache.save_url_cache(url, data)
+                self.cache.save_url_cache(cache_key, data)
                 print(f"  💾 [CACHE SAVED] {tag}")
             return data
         except Exception as e:

@@ -12,6 +12,7 @@ from flask_cors import CORS
 from concurrent.futures import ThreadPoolExecutor
 from data.data_service import FinancialDataService
 from data.cache_manager import CacheManager
+from config import ALPHAVANTAGE_KEY, FINNHUB_TOKEN
 
 # Ensure immediate unbuffered terminal output
 sys.stdout.reconfigure(line_buffering=True)
@@ -37,8 +38,9 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
             if shares > 0:
                 return shares
 
-        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker.upper()}&apikey=YOUR_ALPHA_KEY_0'
-        cached = cm.get_url_cache(url)
+        url = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker.upper()}&apikey={ALPHAVANTAGE_KEY}'
+        cache_key = f'https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker.upper()}'
+        cached = cm.get_url_cache(cache_key) or cm.get_url_cache(url)
         if cached and isinstance(cached, dict) and "MarketCapitalization" in cached:
             print(f"  ⚡ [CACHE HIT] Alpha Vantage: Shares Outstanding / Overview ({ticker.upper()})")
             overview = cached
@@ -47,7 +49,7 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
             resp = requests.get(url, timeout=10)
             overview = resp.json()
             if isinstance(overview, dict) and "Information" not in overview and "Note" not in overview:
-                cm.save_url_cache(url, overview)
+                cm.save_url_cache(cache_key, overview)
                 print(f"  💾 [CACHE SAVED] Alpha Vantage: Shares Outstanding / Overview ({ticker.upper()})")
         
         mc = float(overview.get('MarketCapitalization', 0)) if isinstance(overview, dict) else 0.0

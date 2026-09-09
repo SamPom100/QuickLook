@@ -6,19 +6,16 @@ import yfinance as yf
 from .models import CompanyOverview, FinancialStatement
 from .ratio_engine import RatioEngine
 from .cache_manager import CacheManager
+from config import ALPHAVANTAGE_KEY
 
 
 class FinancialDataProvider:
     """
-    100% Alpha Vantage Data Provider using user's API key YOUR_ALPHA_KEY_0.
-    - Zero SEC EDGAR, zero XBRL tag guessing.
-    - Pure standardized quarterly reports directly from Alpha Vantage.
-    - 100% SQLite disk caching of all HTTP calls to protect API quota.
-    - Automatic 1.2s throttling between live calls to comply with free-tier rate limits.
+    Standardized Alpha Vantage Data Provider with resilient caching and rate limiting.
     """
 
-    def __init__(self, api_key: str = "YOUR_ALPHA_KEY_0", cache_manager: Optional[CacheManager] = None):
-        self.api_key = api_key
+    def __init__(self, api_key: Optional[str] = None, cache_manager: Optional[CacheManager] = None):
+        self.api_key = api_key or ALPHAVANTAGE_KEY
         self.cache = cache_manager or CacheManager()
 
     def _fetch_url(self, url: str, label: str = "") -> Dict[str, Any]:
@@ -27,7 +24,8 @@ class FinancialDataProvider:
         If URL exists in SQLite disk cache, returns instantly with zero network call.
         """
         tag = label or url.split("&apikey=")[0]
-        cached = self.cache.get_url_cache(url)
+        cache_key = url.split("&apikey=")[0].split("&token=")[0]
+        cached = self.cache.get_url_cache(cache_key) or self.cache.get_url_cache(url)
         if cached:
             print(f"  ⚡ [CACHE HIT] {tag}")
             return cached
@@ -46,7 +44,7 @@ class FinancialDataProvider:
             
             # Cache valid responses permanently to disk
             if data and "Error Message" not in data and "Information" not in data and "Note" not in data:
-                self.cache.save_url_cache(url, data)
+                self.cache.save_url_cache(cache_key, data)
                 print(f"  💾 [CACHE SAVED] {tag}")
             return data
         except Exception as e:
