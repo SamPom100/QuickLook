@@ -12,7 +12,7 @@ from flask_cors import CORS
 from concurrent.futures import ThreadPoolExecutor
 from data.data_service import FinancialDataService
 from data.cache_manager import CacheManager
-from config import ALPHAVANTAGE_KEY, FINNHUB_TOKEN
+from config import ALPHAVANTAGE_KEY
 
 # Ensure immediate unbuffered terminal output
 sys.stdout.reconfigure(line_buffering=True)
@@ -74,7 +74,7 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
         return 1e9
 
 
-from data.peer_service import FinnhubPeerService
+from data.peer_service import PeerService
 from yfinance import Industry
 
 
@@ -124,8 +124,8 @@ def fetch_single_peer(p_sym: str) -> dict:
         }
 
 def get_peer_comparison(ticker: str) -> list:
-    # Dynamically discover direct competitor peers via Finnhub API
-    peer_symbols = FinnhubPeerService.get_dynamic_peers(ticker, cm)
+    # Dynamically discover direct competitor peers via Yahoo Finance
+    peer_symbols = PeerService.get_dynamic_peers(ticker, cm)
     with ThreadPoolExecutor(max_workers=len(peer_symbols)) as executor:
         results = list(executor.map(fetch_single_peer, peer_symbols))
     return results

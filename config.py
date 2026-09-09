@@ -23,4 +23,4 @@ def _load_env_file():
 _load_env_file()
 
 ALPHAVANTAGE_KEY = os.environ.get("ALPHAVANTAGE_KEY") or os.environ.get("ALPHAVANTAGE_API_KEY") or ""
-FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN") or os.environ.get("FINNHUB_API_TOKEN") or ""
+

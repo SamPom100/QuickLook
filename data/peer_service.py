@@ -1,14 +1,12 @@
-import json
-import requests
 import re
 from typing import List, Optional
 import yfinance as yf
+from yfinance import Industry
 from concurrent.futures import ThreadPoolExecutor
-from config import FINNHUB_TOKEN
 
 
-class FinnhubPeerService:
-    """Dynamic Finnhub Competitor Benchmark Service sorted by Market Cap relevance."""
+class PeerService:
+    """Dynamic Competitor Benchmark Service powered 100% by Yahoo Finance with zero API keys."""
 
     @staticmethod
     def get_market_cap(p_sym: str) -> float:
@@ -22,63 +20,60 @@ class FinnhubPeerService:
     @classmethod
     def get_dynamic_peers(cls, ticker: str, cache_manager=None) -> List[str]:
         ticker_upper = ticker.upper()
-        cache_key = f"resolved_peers:{ticker_upper}"
+        cache_key = f"resolved_peers_yf_v1:{ticker_upper}"
 
-        # 1. Check if final resolved sorted peer list is cached in SQLite
+        # 1. Check SQLite disk cache
         if cache_manager:
             cached = cache_manager.get_url_cache(cache_key)
             if cached and isinstance(cached, list) and len(cached) > 0:
-                print(f"  ⚡ [CACHE HIT] Finnhub: Competitor Peers ({ticker_upper})")
+                print(f"  ⚡ [CACHE HIT] Competitor Peers ({ticker_upper})")
                 return cached
 
-        # 2. Check raw Finnhub response cache
-        raw_cache_key = f"https://finnhub.io/api/v1/stock/peers?symbol={ticker_upper}"
-        url = f"https://finnhub.io/api/v1/stock/peers?symbol={ticker_upper}&token={FINNHUB_TOKEN}"
-        raw_peers = None
-        if cache_manager:
-            cached_raw = cache_manager.get_url_cache(raw_cache_key) or cache_manager.get_url_cache(url)
-            if cached_raw:
-                raw_peers = cached_raw
+        print(f"  🌐 [LIVE API CALL] Yahoo Finance: Competitor Peers ({ticker_upper})")
+        candidates = []
 
-        # 3. Live Finnhub API Fetch if not in cache
-        if not raw_peers and FINNHUB_TOKEN:
-            print(f"  🌐 [LIVE API CALL] Finnhub: Competitor Peers ({ticker_upper})")
-            try:
-                resp = requests.get(url, timeout=5)
-                if resp.status_code == 200:
-                    raw_peers = resp.json()
-                    if isinstance(raw_peers, list) and len(raw_peers) > 0:
-                        if cache_manager:
-                            cache_manager.save_url_cache(raw_cache_key, raw_peers)
-                            print(f"  💾 [CACHE SAVED] Finnhub: Competitor Peers ({ticker_upper})")
-            except Exception as e:
-                print(f"  ⚠️ [API ERROR] Finnhub Peer Fetch for {ticker_upper}: {e}")
-
-        # 4. Clean and filter peer symbols
-        filtered_peers = []
-        if isinstance(raw_peers, list):
-            for p in raw_peers:
-                p_sym = str(p).upper().strip()
-                if p_sym != ticker_upper and re.match(r"^[A-Z]{1,5}$", p_sym):
-                    filtered_peers.append(p_sym)
-
-        # Fallback to major industry benchmarks if fewer than 3 clean peers
-        if len(filtered_peers) < 3:
-            defaults = ["MSFT", "AAPL", "GOOGL", "AMZN", "NVDA"]
-            for d in defaults:
-                if d != ticker_upper and d not in filtered_peers:
-                    filtered_peers.append(d)
-
-        # 5. Sort Candidate Peers by Market Capitalization (Descending) for maximum relevance
+        # 2. Query Yahoo Finance Industry constituents
         try:
-            with ThreadPoolExecutor(max_workers=min(len(filtered_peers), 10)) as executor:
-                mc_map = dict(zip(filtered_peers, executor.map(cls.get_market_cap, filtered_peers)))
-            filtered_peers = sorted(filtered_peers, key=lambda s: mc_map.get(s, 0.0), reverse=True)
+            t = yf.Ticker(ticker_upper)
+            info = t.info or {}
+            ind_key = info.get("industryKey")
+            
+            if ind_key:
+                ind = Industry(ind_key)
+                if hasattr(ind, "top_companies") and ind.top_companies is not None and not ind.top_companies.empty:
+                    top_list = [
+                        str(s).upper().strip()
+                        for s in list(ind.top_companies.index)
+                        if str(s).upper().strip() != ticker_upper and re.match(r"^[A-Z]{1,5}$", str(s).upper().strip())
+                    ]
+                    candidates.extend(top_list[:8])
+        except Exception as e:
+            print(f"  ⚠️ [PEER SERVICE] Error fetching industry constituents for {ticker_upper}: {e}")
+
+        # 3. Fallbacks for mega-caps with few direct US industry peers (e.g. AAPL)
+        if len(candidates) < 3 or (ticker_upper in ["AAPL", "GOOGL", "GOOG"]):
+            mega_defaults = ["MSFT", "NVDA", "GOOGL", "AMZN", "META", "AAPL"]
+            for m in mega_defaults:
+                if m != ticker_upper and m not in candidates:
+                    candidates.append(m)
+
+        # 4. Sort by Market Capitalization descending to ensure the most relevant direct competitors
+        try:
+            with ThreadPoolExecutor(max_workers=min(len(candidates), 8)) as executor:
+                mc_map = dict(zip(candidates, executor.map(cls.get_market_cap, candidates)))
+            candidates = sorted(candidates, key=lambda s: mc_map.get(s, 0.0), reverse=True)
         except Exception:
             pass
 
-        final_peers = filtered_peers[:4]
+        final_peers = candidates[:4]
+        if not final_peers:
+            final_peers = [s for s in ["MSFT", "NVDA", "AMZN", "GOOGL"] if s != ticker_upper][:4]
+
+        # 5. Cache permanently in SQLite
         if cache_manager and len(final_peers) > 0:
             cache_manager.save_url_cache(cache_key, final_peers)
 
         return final_peers
+
+
+
