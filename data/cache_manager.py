@@ -2,6 +2,7 @@ import os
 import io
 import json
 import sqlite3
+from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
@@ -20,8 +21,13 @@ class CacheManager:
         self.db_path = db_path
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_db(self):
         with self._get_connection() as conn:

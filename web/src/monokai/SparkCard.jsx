@@ -7,23 +7,28 @@ export default function SparkCard({
   currentValue,
   badgeText,
   badgePositive = true,
+  badges = null,
   dataPoints = [],
   color = MONOKAI.cyan,
   formatValue = (v) => v,
   height = 90,
   sublabel = '',
+  footerSlot = null,
+  referenceValue = null,
+  referenceColor = MONOKAI.orange,
+  referenceLines = [],
 }) {
   const containerRef = useRef(null);
   const [hoverIndex, setHoverIndex] = useState(null);
 
   // Compute SVG path & coordinates
-  const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY } = useMemo(() => {
+  const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY, computedRefLines } = useMemo(() => {
     const validData = (dataPoints || []).filter(
       (d) => d && d.value != null && !isNaN(Number(d.value)) && isFinite(Number(d.value))
     );
 
     if (validData.length < 2) {
-      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null };
+      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null, computedRefLines: [] };
     }
 
     const vals = validData.map((d) => Number(d.value));
@@ -31,9 +36,30 @@ export default function SparkCard({
     const maxVal = d3.max(vals) || 1;
     const hasNegative = minVal < 0;
 
+    // Gather all reference lines (combining legacy referenceValue/referenceColor + referenceLines array)
+    const allRefLines = [...(referenceLines || [])];
+    if (referenceValue != null && !isNaN(Number(referenceValue))) {
+      allRefLines.unshift({
+        value: Number(referenceValue),
+        color: referenceColor,
+        dash: '4,4',
+      });
+    }
+
+    const validRefLines = allRefLines.filter(
+      (l) => l && l.value != null && !isNaN(Number(l.value)) && isFinite(Number(l.value))
+    );
+
     // When there are negative values, ensure the Y domain includes 0
-    const domainMin = hasNegative ? Math.min(minVal, 0) : minVal;
-    const domainMax = hasNegative ? Math.max(maxVal, 0) : maxVal;
+    let domainMin = hasNegative ? Math.min(minVal, 0) : minVal;
+    let domainMax = hasNegative ? Math.max(maxVal, 0) : maxVal;
+
+    // Expand domain to include any reference lines
+    for (const ref of validRefLines) {
+      domainMin = Math.min(domainMin, Number(ref.value));
+      domainMax = Math.max(domainMax, Number(ref.value));
+    }
+
     const padding = (domainMax - domainMin) * 0.1 || 1;
 
     const w = 300; // normalized width for viewBox
@@ -43,6 +69,10 @@ export default function SparkCard({
     const yScale = d3.scaleLinear().domain([domainMin - padding, domainMax + padding]).range([h - 6, 6]);
 
     const zeroY = hasNegative ? yScale(0) : null;
+    const computedRefLines = validRefLines.map((ref) => ({
+      ...ref,
+      y: yScale(Number(ref.value)),
+    }));
 
     const pts = validData.map((d, i) => ({
       x: xScale(i),
@@ -70,8 +100,9 @@ export default function SparkCard({
       maxVal,
       hasNegative,
       zeroY,
+      computedRefLines,
     };
-  }, [dataPoints, height]);
+  }, [dataPoints, height, referenceValue, referenceColor, referenceLines]);
 
   const handleMouseMove = (e) => {
     if (!containerRef.current || points.length === 0) return;
@@ -139,20 +170,40 @@ export default function SparkCard({
           }}>
             {title}
           </span>
-          {badgeText && (
-            <span style={{
-              fontFamily: MONOKAI.monoFont,
-              fontSize: 11,
-              fontWeight: 700,
-              color: badgePositive ? MONOKAI.green : MONOKAI.pink,
-              background: badgePositive ? 'rgba(166, 226, 46, 0.12)' : 'rgba(249, 38, 114, 0.12)',
-              border: `1px solid ${badgePositive ? 'rgba(166, 226, 46, 0.3)' : 'rgba(249, 38, 114, 0.3)'}`,
-              borderRadius: 4,
-              padding: '1px 6px',
-            }}>
-              {badgeText}
-            </span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {badges && badges.length > 0 ? (
+              badges.map((b, i) => (
+                <span
+                  key={i}
+                  style={{
+                    fontFamily: MONOKAI.monoFont,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: b.color || (b.positive ? MONOKAI.green : MONOKAI.pink),
+                    background: b.bg || (b.color ? `${b.color}15` : (b.positive ? 'rgba(166, 226, 46, 0.12)' : 'rgba(249, 38, 114, 0.12)')),
+                    border: `1px solid ${b.border || (b.color ? `${b.color}40` : (b.positive ? 'rgba(166, 226, 46, 0.3)' : 'rgba(249, 38, 114, 0.3)'))}`,
+                    borderRadius: 4,
+                    padding: '1px 6px',
+                  }}
+                >
+                  {b.text}
+                </span>
+              ))
+            ) : badgeText ? (
+              <span style={{
+                fontFamily: MONOKAI.monoFont,
+                fontSize: 11,
+                fontWeight: 700,
+                color: badgePositive ? MONOKAI.green : MONOKAI.pink,
+                background: badgePositive ? 'rgba(166, 226, 46, 0.12)' : 'rgba(249, 38, 114, 0.12)',
+                border: `1px solid ${badgePositive ? 'rgba(166, 226, 46, 0.3)' : 'rgba(249, 38, 114, 0.3)'}`,
+                borderRadius: 4,
+                padding: '1px 6px',
+              }}>
+                {badgeText}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {/* Big Bold Current / Scrubbed Value */}
@@ -212,6 +263,21 @@ export default function SparkCard({
             />
           )}
 
+          {/* Reference Dashed Lines (e.g. 5-year median, Industry median) */}
+          {computedRefLines.map((ref, idx) => (
+            <line
+              key={idx}
+              x1={0}
+              x2={300}
+              y1={ref.y}
+              y2={ref.y}
+              stroke={ref.color || MONOKAI.orange}
+              strokeWidth={1}
+              strokeDasharray={ref.dash || '4,4'}
+              opacity={0.75}
+            />
+          ))}
+
           {/* Area Fill */}
           {areaData && (
             <path d={areaData} fill={`url(#${gradId})`} />
@@ -254,6 +320,16 @@ export default function SparkCard({
           )}
         </svg>
       </div>
+
+      {footerSlot && (
+        <div style={{
+          marginTop: 10,
+          borderTop: `1px solid ${MONOKAI.borderSubtle}`,
+          paddingTop: 8,
+        }}>
+          {footerSlot}
+        </div>
+      )}
     </div>
   );
 }

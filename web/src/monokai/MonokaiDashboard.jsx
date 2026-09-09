@@ -33,12 +33,13 @@ function SectionHeader({ num, title, color }) {
   );
 }
 
-export default function MonokaiDashboard({ data }) {
+export default function MonokaiDashboard({ data, onSelectTicker }) {
   const [timeframe, setTimeframe] = useState('5Y'); // '1Y', '3Y', '5Y', 'ALL'
 
   const rawQuarters = data?.quarters || [];
   const rawStockPrices = data?.stockPrices || [];
   const kpis = data?.kpis || {};
+  const peers = data?.peers || [];
   const unitSuffix = data?.unitSuffix || kpis.unitSuffix || 'B';
 
   // Slice data by timeframe
@@ -211,6 +212,57 @@ export default function MonokaiDashboard({ data }) {
     ? ((latestOpEx / latestQ.revenue) * 100).toFixed(1)
     : null;
 
+  // Valuation Benchmarks & Reference Lines
+  const peBadges = useMemo(() => {
+    const list = [];
+    if (kpis.medianPE5YClean || kpis.medianPE5Y) {
+      list.push({ text: `5Y Med ${(kpis.medianPE5YClean || kpis.medianPE5Y).toFixed(1)}x`, color: MONOKAI.orange });
+    }
+    if (kpis.industryPE) {
+      list.push({ text: `Ind Med ${kpis.industryPE.toFixed(1)}x`, color: MONOKAI.yellow });
+    }
+    return list;
+  }, [kpis.medianPE5YClean, kpis.medianPE5Y, kpis.industryPE]);
+
+  const peRefLines = useMemo(() => {
+    const lines = [];
+    if (kpis.medianPE5YClean || kpis.medianPE5Y) {
+      lines.push({
+        value: kpis.medianPE5YClean || kpis.medianPE5Y,
+        color: MONOKAI.orange,
+        dash: '4,4',
+      });
+    }
+    if (kpis.industryPE) {
+      lines.push({
+        value: kpis.industryPE,
+        color: MONOKAI.yellow,
+        dash: '3,3',
+      });
+    }
+    return lines;
+  }, [kpis.medianPE5YClean, kpis.medianPE5Y, kpis.industryPE]);
+
+  const psBadges = useMemo(() => {
+    const list = [];
+    if (kpis.industryPS) {
+      list.push({ text: `Ind Med ${kpis.industryPS.toFixed(1)}x`, color: MONOKAI.yellow });
+    }
+    return list;
+  }, [kpis.industryPS]);
+
+  const psRefLines = useMemo(() => {
+    const lines = [];
+    if (kpis.industryPS) {
+      lines.push({
+        value: kpis.industryPS,
+        color: MONOKAI.yellow,
+        dash: '4,4',
+      });
+    }
+    return lines;
+  }, [kpis.industryPS]);
+
   return (
     <div style={{ width: '100%' }}>
       {/* Timeframe Control Bar */}
@@ -263,7 +315,7 @@ export default function MonokaiDashboard({ data }) {
       <div style={{ marginBottom: 32 }}>
         <SectionHeader
           num="01"
-          title="VALUATION"
+          title={`VALUATION${kpis.industryName ? ` // ${kpis.industryName.toUpperCase()}` : ''}`}
           color={MONOKAI.purple}
         />
         <div style={{
@@ -285,21 +337,145 @@ export default function MonokaiDashboard({ data }) {
           <SparkCard
             title="P/E Multiple"
             currentValue={latestQ.peRatio ? `${latestQ.peRatio.toFixed(1)}x` : (kpis.ttmPE ? `${kpis.ttmPE.toFixed(1)}x` : '—')}
-            badgeText={kpis.medianPE5YClean ? `5Y Med ${kpis.medianPE5YClean.toFixed(1)}x` : null}
-            badgePositive={true}
+            badges={peBadges}
             dataPoints={peSeries}
             color={MONOKAI.purple}
             formatValue={(v) => `${v.toFixed(1)}x`}
             height={95}
+            referenceLines={peRefLines}
+            footerSlot={peers && peers.length > 0 ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                flexWrap: 'wrap',
+              }}>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: MONOKAI.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginRight: 2,
+                }}>
+                  Peers:
+                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const peVal = typeof p === 'object' && p.peRatio ? parseFloat(p.peRatio) : null;
+                  const pe = peVal != null && !isNaN(peVal) ? `${peVal.toFixed(1)}x` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.purple;
+                        e.currentTarget.style.color = MONOKAI.purple;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.purple }}>{pe}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           />
 
           <SparkCard
             title="P/S Multiple"
             currentValue={latestQ.psRatio ? `${latestQ.psRatio.toFixed(1)}x` : (kpis.ttmPS ? `${kpis.ttmPS.toFixed(1)}x` : '—')}
+            badges={psBadges}
             dataPoints={psSeries}
             color={MONOKAI.cyan}
             formatValue={(v) => `${v.toFixed(1)}x`}
             height={95}
+            referenceLines={psRefLines}
+            footerSlot={peers && peers.length > 0 ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                flexWrap: 'wrap',
+              }}>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: MONOKAI.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginRight: 2,
+                }}>
+                  Peers:
+                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const psVal = typeof p === 'object' && p.psRatio ? parseFloat(p.psRatio) : null;
+                  const ps = psVal != null && !isNaN(psVal) ? `${psVal.toFixed(1)}x` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.cyan;
+                        e.currentTarget.style.color = MONOKAI.cyan;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.cyan }}>{ps}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           />
         </div>
       </div>

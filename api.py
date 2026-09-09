@@ -72,6 +72,7 @@ def get_shares_outstanding(ticker: str, latest_price: float = 0.0) -> float:
 
 
 from data.peer_service import FinnhubPeerService
+from yfinance import Industry
 
 
 def fetch_single_peer(p_sym: str) -> dict:
@@ -83,33 +84,40 @@ def fetch_single_peer(p_sym: str) -> dict:
             p_price = float(val_df["Close"].iloc[-1])
         
         p_pe = "N/A"
-        peer_cache_key = f'https://peer-info/{p_sym_upper}'
+        p_ps = "N/A"
+        peer_cache_key = f'https://peer-info-v2/{p_sym_upper}'
         cached = cm.get_url_cache(peer_cache_key)
         
         if cached and isinstance(cached, dict) and "peRatio" in cached:
             p_pe = cached.get("peRatio", "N/A")
+            p_ps = cached.get("psRatio", "N/A")
         else:
             # Query Yahoo Finance directly with 0 rate limits
             try:
                 yf_t = yf.Ticker(p_sym_upper)
                 yf_info = yf_t.info or {}
                 pe_val = yf_info.get("trailingPE") or yf_info.get("forwardPE")
+                ps_val = yf_info.get("priceToSalesTrailing12Months")
                 if pe_val and pe_val != "None":
                     p_pe = round(float(pe_val), 2)
-                cm.save_url_cache(peer_cache_key, {"peRatio": p_pe})
+                if ps_val and ps_val != "None":
+                    p_ps = round(float(ps_val), 2)
+                cm.save_url_cache(peer_cache_key, {"peRatio": p_pe, "psRatio": p_ps})
             except Exception:
-                cm.save_url_cache(peer_cache_key, {"peRatio": "N/A"})
+                cm.save_url_cache(peer_cache_key, {"peRatio": "N/A", "psRatio": "N/A"})
 
         return {
             "ticker": p_sym_upper,
             "price": round(p_price, 2) if p_price > 0 else "—",
-            "peRatio": p_pe
+            "peRatio": p_pe,
+            "psRatio": p_ps,
         }
     except Exception:
         return {
             "ticker": p_sym,
             "price": "—",
-            "peRatio": "N/A"
+            "peRatio": "N/A",
+            "psRatio": "N/A",
         }
 
 def get_peer_comparison(ticker: str) -> list:
@@ -120,6 +128,81 @@ def get_peer_comparison(ticker: str) -> list:
     return results
 
 
+def get_industry_benchmarks(ticker: str, cache_manager=None) -> dict:
+    """
+    Dynamically compute Industry Median P/E and P/S across top industry constituent leaders.
+    Zero hardcoding; dynamically queries yfinance.Industry and caches in SQLite.
+    """
+    ticker_upper = ticker.upper()
+    cache_key = f"industry_benchmark_v2:{ticker_upper}"
+    if cache_manager:
+        cached = cache_manager.get_url_cache(cache_key)
+        if cached and isinstance(cached, dict) and "pe" in cached:
+            return cached
+
+    try:
+        yf_t = yf.Ticker(ticker_upper)
+        info = yf_t.info or {}
+        ind_key = info.get("industryKey")
+        ind_name = info.get("industry") or (ind_key.replace("-", " ").title() if ind_key else None)
+        if not ind_key:
+            return {"pe": None, "ps": None, "industry": None}
+
+        ind_cache_key = f"industry_metrics:{ind_key}"
+        if cache_manager:
+            ind_cached = cache_manager.get_url_cache(ind_cache_key)
+            if ind_cached and isinstance(ind_cached, dict) and "pe" in ind_cached:
+                if cache_manager:
+                    cache_manager.save_url_cache(cache_key, ind_cached)
+                return ind_cached
+
+        ind = Industry(ind_key)
+        top_syms = []
+        if hasattr(ind, "top_companies") and ind.top_companies is not None and not ind.top_companies.empty:
+            top_syms = list(ind.top_companies.index[:15])
+
+        if not top_syms:
+            return {"pe": None, "ps": None, "industry": ind_name}
+
+        def fetch_mults(sym):
+            try:
+                sym_info = yf.Ticker(sym).info or {}
+                p_e = sym_info.get("trailingPE")
+                p_s = sym_info.get("priceToSalesTrailing12Months")
+                return {
+                    "pe": float(p_e) if p_e and 0 < float(p_e) < 250 else None,
+                    "ps": float(p_s) if p_s and 0 < float(p_s) < 100 else None,
+                }
+            except Exception:
+                return {"pe": None, "ps": None}
+
+        with ThreadPoolExecutor(max_workers=min(len(top_syms), 12)) as ex:
+            results = list(ex.map(fetch_mults, top_syms))
+
+        pes = [r["pe"] for r in results if r["pe"] is not None]
+        pss = [r["ps"] for r in results if r["ps"] is not None]
+
+        med_pe = round(float(np.median(pes)), 1) if len(pes) >= 2 else None
+        med_ps = round(float(np.median(pss)), 1) if len(pss) >= 2 else None
+
+        res = {
+            "pe": med_pe,
+            "ps": med_ps,
+            "industry": ind_name,
+            "count": len(top_syms),
+        }
+
+        if cache_manager:
+            cache_manager.save_url_cache(ind_cache_key, res)
+            cache_manager.save_url_cache(cache_key, res)
+
+        print(f"  🏢 [INDUSTRY] {ind_name}: Median PE {med_pe}x, Median PS {med_ps}x ({len(pes)}/{len(top_syms)} leaders)")
+        return res
+    except Exception as e:
+        print(f"  ⚠️ [INDUSTRY BENCHMARK] Error computing industry metrics for {ticker}: {e}")
+        return {"pe": None, "ps": None, "industry": None}
+
+
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
     ticker = ticker.upper()
@@ -128,17 +211,20 @@ def get_data(ticker):
     analysis = None
     val_df = None
     peers_data = []
+    industry_benchmarks = {"pe": None, "ps": None, "industry": None}
     
-    # Run financial statement analysis, price valuation history, and peer comparison all concurrently in parallel
+    # Run financial statements, valuation, peers, and industry benchmarks concurrently in parallel
     for attempt in range(2):
         try:
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            with ThreadPoolExecutor(max_workers=4) as executor:
                 f_analysis = executor.submit(service.get_financial_analysis, ticker, "quarterly")
                 f_val = executor.submit(service.get_valuation_history, ticker, "10y")
                 f_peers = executor.submit(get_peer_comparison, ticker)
+                f_ind = executor.submit(get_industry_benchmarks, ticker, cm)
                 analysis = f_analysis.result()
                 val_df = f_val.result()
                 peers_data = f_peers.result()
+                industry_benchmarks = f_ind.result()
             if analysis and len(analysis) > 0:
                 break
         except Exception as e:
@@ -408,6 +494,9 @@ def get_data(ticker):
         "analystGrowthFY0": analyst_growth_fy0,
         "analystGrowthFY1": analyst_growth_fy1,
         "analystCount": analyst_count,
+        "industryPE": industry_benchmarks.get("pe"),
+        "industryPS": industry_benchmarks.get("ps"),
+        "industryName": industry_benchmarks.get("industry"),
         "unitSuffix": unit_suffix,
     }
 
@@ -427,6 +516,7 @@ def get_data(ticker):
         "stockPrices": stock_prices,
         "kpis": kpis,
         "peers": peers_data,
+        "industryBenchmarks": industry_benchmarks,
         "isThrottled": was_throttled,
         "notice": notice,
     })

@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MONOKAI } from './theme';
 
-const POPULAR_TICKERS = ['MSFT', 'AAPL', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'];
+const RECENT_STORAGE_KEY = 'quicklook_recent_tickers';
+const DEFAULT_RECENTS = ['MSFT', 'NVDA', 'AAPL', 'AMZN', 'GOOGL'];
+
+function getInitialRecents() {
+  try {
+    const saved = localStorage.getItem(RECENT_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return DEFAULT_RECENTS;
+}
 
 export default function MonokaiHeader({
   ticker,
   data,
   loading,
   onSearch,
-  uiMode,
-  onToggleUiMode,
 }) {
   const [searchInput, setSearchInput] = useState(ticker || 'MSFT');
+  const [recents, setRecents] = useState(getInitialRecents);
+
+  // Sync search input when active ticker changes
+  useEffect(() => {
+    if (ticker) {
+      setSearchInput(ticker);
+      const upper = ticker.toUpperCase();
+      setRecents((prev) => {
+        const filtered = prev.filter((t) => t !== upper);
+        const updated = [upper, ...filtered].slice(0, 6);
+        try {
+          localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+          // ignore
+        }
+        return updated;
+      });
+    }
+  }, [ticker]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -130,75 +161,48 @@ export default function MonokaiHeader({
             </button>
           </form>
 
-          {/* Quick presets */}
+          {/* Recent searches history */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {POPULAR_TICKERS.map((t) => (
-              <button
-                key={t}
-                onClick={() => { setSearchInput(t); onSearch(t); }}
-                style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: ticker === t ? MONOKAI.cyan : MONOKAI.muted,
-                  background: ticker === t ? MONOKAI.bgElevated : 'transparent',
-                  border: `1px solid ${ticker === t ? MONOKAI.cyan : MONOKAI.borderSubtle}`,
-                  borderRadius: 4,
-                  padding: '3px 7px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {t}
-              </button>
-            ))}
+            {recents.map((t) => {
+              const isActive = ticker === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => { setSearchInput(t); onSearch(t); }}
+                  title={`Switch to ${t}`}
+                  style={{
+                    fontFamily: MONOKAI.monoFont,
+                    fontSize: 11,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? MONOKAI.cyan : MONOKAI.muted,
+                    background: isActive ? MONOKAI.bgElevated : 'transparent',
+                    border: `1px solid ${isActive ? MONOKAI.cyan : MONOKAI.borderSubtle}`,
+                    borderRadius: 4,
+                    padding: '3px 7px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = MONOKAI.muted;
+                      e.currentTarget.style.color = MONOKAI.text;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                      e.currentTarget.style.color = MONOKAI.muted;
+                    }
+                  }}
+                >
+                  {t}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* View Switcher Pill (Monokai vs Classic) */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          background: MONOKAI.bg,
-          border: `1px solid ${MONOKAI.border}`,
-          borderRadius: 6,
-          padding: 2,
-        }}>
-          <button
-            onClick={() => onToggleUiMode('monokai')}
-            style={{
-              fontFamily: MONOKAI.monoFont,
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '4px 10px',
-              borderRadius: 4,
-              border: 'none',
-              background: uiMode === 'monokai' ? MONOKAI.cyan : 'transparent',
-              color: uiMode === 'monokai' ? MONOKAI.bgDark : MONOKAI.muted,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            ⚡ Monokai
-          </button>
-          <button
-            onClick={() => onToggleUiMode('classic')}
-            style={{
-              fontFamily: MONOKAI.monoFont,
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '4px 10px',
-              borderRadius: 4,
-              border: 'none',
-              background: uiMode === 'classic' ? '#f0f0f0' : 'transparent',
-              color: uiMode === 'classic' ? '#222' : MONOKAI.muted,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            Classic
-          </button>
-        </div>
+
       </div>
 
       {/* Telemetry Strip for Selected Ticker */}
@@ -282,54 +286,6 @@ export default function MonokaiHeader({
               </div>
             )}
           </div>
-
-          {/* Competitor Benchmarks Pills */}
-          {data.peers && data.peers.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{
-                fontSize: 10,
-                fontFamily: MONOKAI.monoFont,
-                color: MONOKAI.muted,
-                textTransform: 'uppercase',
-              }}>
-                Peers:
-              </span>
-              {data.peers.slice(0, 5).map((p) => {
-                const sym = typeof p === 'string' ? p : p.ticker;
-                const peVal = typeof p === 'object' && p.peRatio ? parseFloat(p.peRatio) : null;
-                const pe = peVal != null && !isNaN(peVal) ? ` ${peVal.toFixed(1)}x` : '';
-                return (
-                  <button
-                    key={sym}
-                    onClick={() => { setSearchInput(sym); onSearch(sym); }}
-                    title={typeof p === 'object' && p.name ? p.name : sym}
-                    style={{
-                      fontFamily: MONOKAI.monoFont,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: MONOKAI.textDim,
-                      background: MONOKAI.bgSurface,
-                      border: `1px solid ${MONOKAI.borderSubtle}`,
-                      borderRadius: 4,
-                      padding: '2px 6px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = MONOKAI.cyan;
-                      e.currentTarget.style.color = MONOKAI.cyan;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
-                      e.currentTarget.style.color = MONOKAI.textDim;
-                    }}
-                  >
-                    {sym}<span style={{ color: MONOKAI.muted, fontSize: 10 }}>{pe}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
     </header>

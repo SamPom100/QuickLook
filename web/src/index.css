@@ -5,7 +5,8 @@
 }
 
 body {
-  background: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  background: #272822;
+  color: #f8f8f2;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   -webkit-font-smoothing: antialiased;
 }

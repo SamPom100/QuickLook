@@ -3,6 +3,9 @@
 # Change to script directory regardless of where it's run from
 cd "$(dirname "$0")"
 
+# Raise file descriptor limit on macOS to prevent Errno 24 (Too many open files)
+ulimit -n 4096 2>/dev/null || true
+
 # Clean shutdown handler
 cleanup() {
     echo ""
