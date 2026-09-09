@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import time
+import re
 import requests
 import yfinance as yf
 import pandas as pd
@@ -205,8 +206,40 @@ def get_industry_benchmarks(ticker: str, cache_manager=None) -> dict:
 
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
-    ticker = ticker.upper()
+    ticker = ticker.strip().upper()
     print(f"\n📥 [API REQUEST] GET /api/data/{ticker}")
+
+    # 1. Format validation: reject obviously invalid inputs immediately (<1ms)
+    if not ticker or len(ticker) > 10 or not re.match(r"^[A-Z0-9.\-]+$", ticker):
+        print(f"  ❌ [INVALID FORMAT] '{ticker}' rejected")
+        return jsonify({
+            "error": f"Invalid ticker format: '{ticker}'. Symbol must only contain letters, numbers, dot, or hyphen.",
+            "isInvalidTicker": True,
+        }), 400
+
+    # 2. Fast 60ms validation: Check if ticker actually exists before launching heavy parallel workers
+    is_cached = bool(cm.get_financial_statements(ticker, "quarterly"))
+    if not is_cached:
+        try:
+            val_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+            v_resp = requests.get(val_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=2.0)
+            if v_resp.status_code == 404:
+                print(f"  ❌ [FAST REJECT] Symbol '{ticker}' not found (404)")
+                return jsonify({
+                    "error": f"Symbol '{ticker}' not found. Please verify the ticker symbol.",
+                    "isInvalidTicker": True,
+                }), 404
+            if v_resp.status_code == 200:
+                v_json = v_resp.json()
+                chart_obj = v_json.get("chart", {})
+                if chart_obj.get("error") or chart_obj.get("result") is None:
+                    print(f"  ❌ [FAST REJECT] Symbol '{ticker}' returned chart error or null result")
+                    return jsonify({
+                        "error": f"Symbol '{ticker}' not found or delisted.",
+                        "isInvalidTicker": True,
+                    }), 404
+        except Exception:
+            pass
 
     analysis = None
     val_df = None
@@ -227,18 +260,28 @@ def get_data(ticker):
                 industry_benchmarks = f_ind.result()
             if analysis and len(analysis) > 0:
                 break
+            if not getattr(service.provider, "was_throttled", False):
+                break
         except Exception as e:
             if attempt == 1:
                 return jsonify({"error": str(e)}), 500
         time.sleep(0.5)
 
     if not analysis or len(analysis) == 0:
-        print(f"  ⏳ [THROTTLED] API returned 429 rate limit error for {ticker}")
-        return jsonify({
-            "error": f"Alpha Vantage free-tier rate limit reached (5 requests/minute). Please wait 15 seconds and click Retry.",
-            "isThrottled": True,
-            "retryAfter": 15
-        }), 429
+        was_throttled = getattr(service.provider, "was_throttled", False)
+        if was_throttled:
+            print(f"  ⏳ [THROTTLED] API returned 429 rate limit error for {ticker}")
+            return jsonify({
+                "error": f"Alpha Vantage free-tier rate limit reached (5 requests/minute). Please wait 15 seconds and click Retry.",
+                "isThrottled": True,
+                "retryAfter": 15
+            }), 429
+        else:
+            print(f"  ❌ [NO DATA] No financial statements found for {ticker}")
+            return jsonify({
+                "error": f"No financial statements found for symbol '{ticker}'.",
+                "isInvalidTicker": True,
+            }), 404
 
     df = pd.DataFrame(analysis)
     df["dt"] = pd.to_datetime(df["period_end_date"]).dt.tz_localize(None)

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as d3 from 'd3';
 import { MONOKAI } from './theme';
+import MonokaiErrorBoundary from './MonokaiErrorBoundary';
 
-export default function SparkCard({
+function SparkCardContent({
   title,
   currentValue,
   badgeText,
@@ -267,92 +268,117 @@ export default function SparkCard({
         </div>
       </div>
 
-      {/* Sparkline Graphic */}
+      {/* Sparkline Graphic or Clean Empty State */}
       <div
         ref={svgBoxRef}
         style={{ width: '100%', height, position: 'relative' }}
       >
-        <svg
-          viewBox={`0 0 ${svgWidth} ${height}`}
-          style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
-        >
-          <defs>
-            <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={color} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={color} stopOpacity={0.0} />
-            </linearGradient>
-          </defs>
+        {points.length < 2 ? (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(46, 47, 42, 0.35)',
+            borderRadius: 6,
+            border: `1px dashed ${MONOKAI.borderSubtle}`,
+            gap: 4,
+          }}>
+            <span style={{
+              fontFamily: MONOKAI.monoFont,
+              fontSize: 10,
+              fontWeight: 600,
+              color: MONOKAI.muted,
+              letterSpacing: '0.04em',
+            }}>
+              // NO HISTORICAL DATA
+            </span>
+          </div>
+        ) : (
+          <svg
+            viewBox={`0 0 ${svgWidth} ${height}`}
+            style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
+          >
+            <defs>
+              <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={color} stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
 
-          {/* Dotted Zero Line for negative graphs */}
-          {hasNegative && zeroY !== null && (
-            <line
-              x1={0}
-              x2={svgWidth}
-              y1={zeroY}
-              y2={zeroY}
-              stroke={MONOKAI.muted}
-              strokeWidth={1}
-              strokeDasharray="3,3"
-              opacity={0.65}
-            />
-          )}
-
-          {/* Reference Dashed Lines (e.g. 5-year median, Industry median) */}
-          {computedRefLines.map((ref, idx) => (
-            <line
-              key={idx}
-              x1={0}
-              x2={svgWidth}
-              y1={ref.y}
-              y2={ref.y}
-              stroke={ref.color || MONOKAI.orange}
-              strokeWidth={1}
-              strokeDasharray={ref.dash || '4,4'}
-              opacity={0.75}
-            />
-          ))}
-
-          {/* Area Fill */}
-          {areaData && (
-            <path d={areaData} fill={`url(#${gradId})`} />
-          )}
-
-          {/* Minimalist Line */}
-          {pathData && (
-            <path
-              d={pathData}
-              fill="none"
-              stroke={color}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {/* Active Scrub Marker & Vertical Line */}
-          {activePoint && (
-            <>
+            {/* Dotted Zero Line for negative graphs */}
+            {hasNegative && zeroY !== null && (
               <line
-                x1={activePoint.x}
-                x2={activePoint.x}
-                y1={0}
-                y2={height}
-                stroke={color}
+                x1={0}
+                x2={svgWidth}
+                y1={zeroY}
+                y2={zeroY}
+                stroke={MONOKAI.muted}
                 strokeWidth={1}
-                strokeDasharray="2,2"
-                opacity={0.7}
+                strokeDasharray="3,3"
+                opacity={0.65}
               />
-              <circle
-                cx={activePoint.x}
-                cy={activePoint.y}
-                r={4}
-                fill={color}
-                stroke={MONOKAI.bgDark}
+            )}
+
+            {/* Reference Dashed Lines (e.g. 5-year median, Industry median) */}
+            {computedRefLines.map((ref, idx) => (
+              <line
+                key={idx}
+                x1={0}
+                x2={svgWidth}
+                y1={ref.y}
+                y2={ref.y}
+                stroke={ref.color || MONOKAI.orange}
+                strokeWidth={1}
+                strokeDasharray={ref.dash || '4,4'}
+                opacity={0.75}
+              />
+            ))}
+
+            {/* Area Fill */}
+            {areaData && (
+              <path d={areaData} fill={`url(#${gradId})`} />
+            )}
+
+            {/* Minimalist Line */}
+            {pathData && (
+              <path
+                d={pathData}
+                fill="none"
+                stroke={color}
                 strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
-            </>
-          )}
-        </svg>
+            )}
+
+            {/* Active Scrub Marker & Vertical Line */}
+            {activePoint && (
+              <>
+                <line
+                  x1={activePoint.x}
+                  x2={activePoint.x}
+                  y1={0}
+                  y2={height}
+                  stroke={color}
+                  strokeWidth={1}
+                  strokeDasharray="2,2"
+                  opacity={0.7}
+                />
+                <circle
+                  cx={activePoint.x}
+                  cy={activePoint.y}
+                  r={4}
+                  fill={color}
+                  stroke={MONOKAI.bgDark}
+                  strokeWidth={2}
+                />
+              </>
+            )}
+          </svg>
+        )}
       </div>
 
       {footerSlot && (
@@ -367,3 +393,16 @@ export default function SparkCard({
     </div>
   );
 }
+
+export default function SparkCard(props) {
+  return (
+    <MonokaiErrorBoundary
+      fallbackTitle={props.title || 'CHART'}
+      height={props.height || 90}
+      card={true}
+    >
+      <SparkCardContent {...props} />
+    </MonokaiErrorBoundary>
+  );
+}
+
