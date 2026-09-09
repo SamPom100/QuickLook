@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as d3 from 'd3';
 import { MONOKAI } from './theme';
 
@@ -19,13 +19,48 @@ export default function SparkCard({
   referenceLines = [],
 }) {
   const containerRef = useRef(null);
+  const svgBoxRef = useRef(null);
+  const [svgWidth, setSvgWidth] = useState(300);
   const [hoverIndex, setHoverIndex] = useState(null);
 
-  // Compute SVG path & coordinates
+  // Dynamically measure true rendered width of SVG so graphics never stretch into ovals
+  useEffect(() => {
+    if (!svgBoxRef.current) return;
+    const updateWidth = () => {
+      if (svgBoxRef.current) {
+        const w = svgBoxRef.current.clientWidth;
+        if (w > 20) setSvgWidth(w);
+      }
+    };
+    updateWidth();
+
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect.width > 20) {
+            setSvgWidth(Math.round(entry.contentRect.width));
+          }
+        }
+      });
+      ro.observe(svgBoxRef.current);
+    }
+
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      window.removeEventListener('resize', updateWidth);
+      if (ro) ro.disconnect();
+    };
+  }, []);
+
+  // Compute SVG path & coordinates with true 1:1 pixel coordinates
   const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY, computedRefLines } = useMemo(() => {
     const validData = (dataPoints || []).filter(
       (d) => d && d.value != null && !isNaN(Number(d.value)) && isFinite(Number(d.value))
     );
+
+    const w = svgWidth > 0 ? svgWidth : 300;
+    const h = height;
 
     if (validData.length < 2) {
       return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null, computedRefLines: [] };
@@ -61,9 +96,6 @@ export default function SparkCard({
     }
 
     const padding = (domainMax - domainMin) * 0.1 || 1;
-
-    const w = 300; // normalized width for viewBox
-    const h = height;
 
     const xScale = d3.scaleLinear().domain([0, validData.length - 1]).range([4, w - 4]);
     const yScale = d3.scaleLinear().domain([domainMin - padding, domainMax + padding]).range([h - 6, 6]);
@@ -102,11 +134,11 @@ export default function SparkCard({
       zeroY,
       computedRefLines,
     };
-  }, [dataPoints, height, referenceValue, referenceColor, referenceLines]);
+  }, [dataPoints, height, referenceValue, referenceColor, referenceLines, svgWidth]);
 
   const handleMouseMove = (e) => {
-    if (!containerRef.current || points.length === 0) return;
-    const rect = containerRef.current.getBoundingClientRect();
+    if (!svgBoxRef.current || points.length === 0) return;
+    const rect = svgBoxRef.current.getBoundingClientRect();
     const mouseX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     const frac = mouseX / rect.width;
     const idx = Math.round(frac * (points.length - 1));
@@ -236,11 +268,13 @@ export default function SparkCard({
       </div>
 
       {/* Sparkline Graphic */}
-      <div style={{ width: '100%', height, position: 'relative' }}>
+      <div
+        ref={svgBoxRef}
+        style={{ width: '100%', height, position: 'relative' }}
+      >
         <svg
-          viewBox={`0 0 300 ${height}`}
-          preserveAspectRatio="none"
-          style={{ width: '100%', height: '100%', overflow: 'visible' }}
+          viewBox={`0 0 ${svgWidth} ${height}`}
+          style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
         >
           <defs>
             <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -253,7 +287,7 @@ export default function SparkCard({
           {hasNegative && zeroY !== null && (
             <line
               x1={0}
-              x2={300}
+              x2={svgWidth}
               y1={zeroY}
               y2={zeroY}
               stroke={MONOKAI.muted}
@@ -268,7 +302,7 @@ export default function SparkCard({
             <line
               key={idx}
               x1={0}
-              x2={300}
+              x2={svgWidth}
               y1={ref.y}
               y2={ref.y}
               stroke={ref.color || MONOKAI.orange}

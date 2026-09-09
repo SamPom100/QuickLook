@@ -212,6 +212,18 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
     ? ((latestOpEx / latestQ.revenue) * 100).toFixed(1)
     : null;
 
+  const minPrice = useMemo(() => {
+    if (!stockPrices || stockPrices.length === 0) return currentPrice;
+    const vals = stockPrices.map((p) => Number(p.y != null ? p.y : p.value)).filter((v) => !isNaN(v) && v > 0);
+    return vals.length > 0 ? Math.min(...vals) : currentPrice;
+  }, [stockPrices, currentPrice]);
+
+  const maxPrice = useMemo(() => {
+    if (!stockPrices || stockPrices.length === 0) return currentPrice;
+    const vals = stockPrices.map((p) => Number(p.y != null ? p.y : p.value)).filter((v) => !isNaN(v) && v > 0);
+    return vals.length > 0 ? Math.max(...vals) : currentPrice;
+  }, [stockPrices, currentPrice]);
+
   // Valuation Benchmarks & Reference Lines
   const peBadges = useMemo(() => {
     const list = [];
@@ -332,6 +344,33 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             color={stockReturnPct >= 0 ? MONOKAI.green : MONOKAI.pink}
             formatValue={(v) => `$${v.toFixed(2)}`}
             height={95}
+            sublabel={stockSeries[stockSeries.length - 1]?.date || 'Today'}
+            footerSlot={minPrice > 0 && maxPrice > 0 ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: MONOKAI.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}>
+                  {timeframe} Range:
+                </span>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: MONOKAI.textDim,
+                }}>
+                  ${minPrice.toFixed(2)} – ${maxPrice.toFixed(2)}
+                </span>
+              </div>
+            ) : null}
           />
 
           <SparkCard
@@ -342,6 +381,7 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             color={MONOKAI.purple}
             formatValue={(v) => `${v.toFixed(1)}x`}
             height={95}
+            sublabel={latestQ.date}
             referenceLines={peRefLines}
             footerSlot={peers && peers.length > 0 ? (
               <div style={{
@@ -414,6 +454,7 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             color={MONOKAI.cyan}
             formatValue={(v) => `${v.toFixed(1)}x`}
             height={95}
+            sublabel={latestQ.date}
             referenceLines={psRefLines}
             footerSlot={peers && peers.length > 0 ? (
               <div style={{
