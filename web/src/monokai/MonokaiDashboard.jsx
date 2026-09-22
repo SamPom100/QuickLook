@@ -109,7 +109,7 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
   const peSeries = useMemo(() => {
     return quarters
       .map((q) => ({ date: q.date, value: q.peRatio }))
-      .filter((d) => d.value != null && d.value > 0 && d.value <= 120);
+      .filter((d) => d.value != null && d.value > 0 && d.value <= 250);
   }, [quarters]);
 
   const psSeries = useMemo(() => {
@@ -672,7 +672,7 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
 
           <SparkCard
             title="FCF Conversion %"
-            currentValue={latestQ.fcfConversionPct ? `${latestQ.fcfConversionPct.toFixed(1)}%` : (kpis.ttmFcfConversion ? `${kpis.ttmFcfConversion.toFixed(1)}%` : '—')}
+            currentValue={latestQ.fcfConversionPct != null ? `${latestQ.fcfConversionPct.toFixed(1)}%` : (kpis.ttmFcfConversion != null ? `${kpis.ttmFcfConversion.toFixed(1)}%` : '—')}
             badgeText="FCF / NI"
             badgePositive={true}
             dataPoints={fcfConversionSeries}

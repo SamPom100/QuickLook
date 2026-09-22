@@ -1,4 +1,5 @@
 import time
+import threading
 import requests
 from typing import List, Optional, Dict, Any
 import pandas as pd
@@ -17,6 +18,9 @@ class FinancialDataProvider:
     def __init__(self, api_key: Optional[str] = None, cache_manager: Optional[CacheManager] = None):
         self.api_key = api_key or ALPHAVANTAGE_KEY
         self.cache = cache_manager or CacheManager()
+        self.was_throttled = False
+        self._url_locks: Dict[str, threading.Lock] = {}
+        self._url_locks_guard = threading.Lock()
 
     def _fetch_url(self, url: str, label: str = "") -> Dict[str, Any]:
         """
@@ -25,31 +29,35 @@ class FinancialDataProvider:
         """
         tag = label or url.split("&apikey=")[0]
         cache_key = url.split("&apikey=")[0].split("&token=")[0]
-        cached = self.cache.get_url_cache(cache_key) or self.cache.get_url_cache(url)
-        if cached:
-            print(f"  ⚡ [CACHE HIT] {tag}")
-            return cached
+        with self._url_locks_guard:
+            request_lock = self._url_locks.setdefault(cache_key, threading.Lock())
 
-        print(f"  🌐 [LIVE API CALL] {tag}")
-        try:
-            # Throttle live requests to comply with Alpha Vantage free tier rate limit
-            time.sleep(1.2)
-            r = requests.get(url, timeout=12)
-            data = r.json()
-            
-            # Check for Alpha Vantage rate limit message
-            if isinstance(data, dict) and ("Information" in data or "Note" in data):
-                print(f"  ⏳ [THROTTLED] Alpha Vantage rate limit reached for {tag}")
-                self.was_throttled = True
-            
-            # Cache valid responses permanently to disk
-            if data and "Error Message" not in data and "Information" not in data and "Note" not in data:
-                self.cache.save_url_cache(cache_key, data)
-                print(f"  💾 [CACHE SAVED] {tag}")
-            return data
-        except Exception as e:
-            print(f"  ⚠️ [API ERROR] AlphaVantage Fetch Warning for {tag}: {e}")
-            return {}
+        with request_lock:
+            cached = self.cache.get_url_cache(cache_key) or self.cache.get_url_cache(url)
+            if cached:
+                print(f"  ⚡ [CACHE HIT] {tag}")
+                return cached
+
+            print(f"  🌐 [LIVE API CALL] {tag}")
+            try:
+                # Throttle live requests to comply with Alpha Vantage free tier rate limit
+                time.sleep(1.2)
+                r = requests.get(url, timeout=12)
+                data = r.json()
+
+                # Check for Alpha Vantage rate limit message
+                if isinstance(data, dict) and ("Information" in data or "Note" in data):
+                    print(f"  ⏳ [THROTTLED] Alpha Vantage rate limit reached for {tag}")
+                    self.was_throttled = True
+
+                # Cache valid responses permanently to disk
+                if data and "Error Message" not in data and "Information" not in data and "Note" not in data:
+                    self.cache.save_url_cache(cache_key, data)
+                    print(f"  💾 [CACHE SAVED] {tag}")
+                return data
+            except Exception as e:
+                print(f"  ⚠️ [API ERROR] AlphaVantage Fetch Warning for {tag}: {e}")
+                return {}
 
     def get_company_overview(self, ticker: str) -> CompanyOverview:
         cached_info = self.cache.get_company_info(ticker)
@@ -101,7 +109,7 @@ class FinancialDataProvider:
     def get_financial_statements(
         self, ticker: str, period: str = "quarterly"
     ) -> List[FinancialStatement]:
-        cached_stmt = self.cache.get_financial_statements(ticker, "av_quarterly_v3")
+        cached_stmt = self.cache.get_financial_statements(ticker, "av_quarterly_v4")
         if cached_stmt:
             print(f"  ⚡ [CACHE HIT] Financial Statements ({ticker.upper()}, {period})")
             return [FinancialStatement(**s) for s in cached_stmt]
@@ -173,7 +181,7 @@ class FinancialDataProvider:
 
             if len(statements) > 0:
                 self.cache.save_financial_statements(
-                    ticker, "av_quarterly_v3", [s.model_dump() for s in statements]
+                    ticker, "av_quarterly_v4", [s.model_dump() for s in statements]
                 )
                 print(f"  💾 [CACHE SAVED] Financial Statements ({ticker.upper()}, {len(statements)} quarters)")
                 return statements

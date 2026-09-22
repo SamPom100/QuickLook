@@ -328,7 +328,7 @@ def get_data(ticker):
         gm_pct = round((gp / rev * 100), 2) if rev > 0 else 0.0
         om_pct = round((op / rev * 100), 2) if rev > 0 else 0.0
         nm_pct = round((ni / rev * 100), 2) if rev > 0 else 0.0
-        fcf_conversion = round((fcf / ni * 100), 1) if (ni > 0 and fcf != 0) else None
+        fcf_conversion = round((fcf / ni * 100), 1) if (ni > 0 and fcf is not None) else None
         fcf_margin = round((fcf / rev * 100), 1) if rev > 0 else 0.0
 
         yoy_rev = None
@@ -432,7 +432,7 @@ def get_data(ticker):
 
         q["peRatio"] = q_pe if (q_pe and 0 < q_pe < 250) else None
         q["psRatio"] = q_ps if (q_ps and 0 < q_ps < 100) else None
-        q["fcfYield"] = q_fcf_yield if (q_fcf_yield and -50 < q_fcf_yield < 50) else None
+        q["fcfYield"] = q_fcf_yield if (q_fcf_yield is not None and -50 < q_fcf_yield < 50) else None
         q["epsTTM"] = round(float(eps_q), 2) if eps_q > 0 else None
 
     # Assign YoY EPS Growth % (comparing TTM EPS to TTM EPS 4 quarters prior)
