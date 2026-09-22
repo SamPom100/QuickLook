@@ -35,3 +35,42 @@ def test_live_data_service():
     assert "revenue" in latest
     assert "net_income" in latest
     assert "free_cash_flow" in latest
+    assert "stock_based_compensation" in latest
+    assert "real_fcf" in latest
+
+
+def test_real_fcf_and_sbc_ratio():
+    stmt = FinancialStatement(
+        period_end_date="2026-06-30",
+        revenue=100_000_000,
+        operating_cash_flow=40_000_000,
+        capital_expenditure=-10_000_000,
+        stock_based_compensation=5_000_000,
+    )
+    res = RatioEngine.compute_statement_ratios([stmt])
+    assert len(res) == 1
+    item = res[0]
+    assert item["free_cash_flow"] == 30_000_000
+    assert item["real_fcf"] == 25_000_000
+    assert item["real_fcf_margin_pct"] == 25.0
+    assert item["sbc_pct_rev"] == 5.0
+
+
+def test_api_advanced_metrics():
+    from api import app
+    with app.test_client() as client:
+        res = client.get("/api/data/MSFT")
+        assert res.status_code == 200
+        data = res.get_json()
+        kpis = data.get("kpis", {})
+        assert "evEbitda" in kpis
+        assert "netDebtLabel" in kpis
+        assert "latestROIC" in kpis
+        assert "ttmRealFCF" in kpis
+        quarters = data.get("quarters", [])
+        assert len(quarters) > 0
+        latest_q = quarters[-1]
+        assert "realFreeCashFlow" in latest_q
+        assert "stockBasedCompensation" in latest_q
+        assert "roic" in latest_q
+

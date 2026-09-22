@@ -46,6 +46,11 @@ class RatioEngine:
             net_inc = item.get("net_income")
             gross = item.get("gross_profit")
             fcf = item.get("free_cash_flow")
+            sbc = item.get("stock_based_compensation")
+
+            if item.get("real_fcf") is None and fcf is not None:
+                item["real_fcf"] = fcf - (sbc or 0.0)
+            real_fcf = item.get("real_fcf")
 
             # 2. Margins
             item["gross_margin_pct"] = (
@@ -56,6 +61,12 @@ class RatioEngine:
             )
             item["fcf_margin_pct"] = (
                 (fcf / rev * 100) if (rev and fcf and rev != 0) else None
+            )
+            item["real_fcf_margin_pct"] = (
+                (real_fcf / rev * 100) if (rev and real_fcf is not None and rev != 0) else None
+            )
+            item["sbc_pct_rev"] = (
+                (sbc / rev * 100) if (rev and sbc is not None and rev != 0) else None
             )
 
             # 3. YoY Growth Metrics

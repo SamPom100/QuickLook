@@ -10,6 +10,7 @@ function SparkCardContent({
   badgePositive = true,
   badges = null,
   dataPoints = [],
+  multiSeries = null,
   color = MONOKAI.cyan,
   formatValue = (v) => v,
   height = 90,
@@ -18,6 +19,8 @@ function SparkCardContent({
   referenceValue = null,
   referenceColor = MONOKAI.orange,
   referenceLines = [],
+  className = '',
+  style = {},
 }) {
   const containerRef = useRef(null);
   const svgBoxRef = useRef(null);
@@ -55,16 +58,73 @@ function SparkCardContent({
   }, []);
 
   // Compute SVG path & coordinates with true 1:1 pixel coordinates
-  const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY, computedRefLines } = useMemo(() => {
+  const { pathData, areaData, points, minVal, maxVal, hasNegative, zeroY, computedRefLines, multiData } = useMemo(() => {
+    const w = svgWidth > 0 ? svgWidth : 300;
+    const h = height;
+
+    if (multiSeries && multiSeries.length > 0) {
+      const allVals = [];
+      let maxLen = 0;
+      multiSeries.forEach((s) => {
+        (s.data || []).forEach((d) => {
+          const val = Number(d.value);
+          if (!isNaN(val) && isFinite(val)) allVals.push(val);
+        });
+        if ((s.data || []).length > maxLen) maxLen = s.data.length;
+      });
+
+      if (maxLen < 2 || allVals.length === 0) {
+        return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null, computedRefLines: [], multiData: [] };
+      }
+
+      const minVal = d3.min(allVals) || 0;
+      const maxVal = d3.max(allVals) || 1;
+      const hasNegative = minVal < 0;
+      const domainMin = hasNegative ? Math.min(minVal, 0) : 0;
+      const domainMax = Math.max(maxVal, 1);
+      const padding = (domainMax - domainMin) * 0.1 || 1;
+
+      const xScale = d3.scaleLinear().domain([0, maxLen - 1]).range([4, w - 4]);
+      const yScale = d3.scaleLinear().domain([domainMin - padding, domainMax + padding]).range([h - 6, 6]);
+
+      const multiData = multiSeries.map((s) => {
+        const sPts = (s.data || []).map((d, i) => ({
+          x: xScale(i),
+          y: yScale(Number(d.value)),
+          date: d.date,
+          value: Number(d.value),
+        }));
+        const lineGen = d3.line().x((d) => d.x).y((d) => d.y).curve(d3.curveMonotoneX);
+        const areaGen = d3.area().x((d) => d.x).y0(h).y1((d) => d.y).curve(d3.curveMonotoneX);
+        return {
+          name: s.name,
+          color: s.color || color,
+          points: sPts,
+          pathData: lineGen(sPts) || '',
+          areaData: areaGen(sPts) || '',
+          formatValue: s.formatValue || formatValue,
+        };
+      });
+
+      return {
+        pathData: '',
+        areaData: '',
+        points: multiData[0]?.points || [],
+        minVal,
+        maxVal,
+        hasNegative,
+        zeroY: hasNegative ? yScale(0) : null,
+        computedRefLines: [],
+        multiData,
+      };
+    }
+
     const validData = (dataPoints || []).filter(
       (d) => d && d.value != null && !isNaN(Number(d.value)) && isFinite(Number(d.value))
     );
 
-    const w = svgWidth > 0 ? svgWidth : 300;
-    const h = height;
-
     if (validData.length < 2) {
-      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null, computedRefLines: [] };
+      return { pathData: '', areaData: '', points: [], minVal: 0, maxVal: 0, hasNegative: false, zeroY: null, computedRefLines: [], multiData: [] };
     }
 
     const vals = validData.map((d) => Number(d.value));
@@ -134,8 +194,9 @@ function SparkCardContent({
       hasNegative,
       zeroY,
       computedRefLines,
+      multiData: [],
     };
-  }, [dataPoints, height, referenceValue, referenceColor, referenceLines, svgWidth]);
+  }, [dataPoints, multiSeries, height, referenceValue, referenceColor, referenceLines, svgWidth, formatValue, color]);
 
   const handleMouseMove = (e) => {
     if (!svgBoxRef.current || points.length === 0) return;
@@ -152,8 +213,20 @@ function SparkCardContent({
   };
 
   const activePoint = hoverIndex !== null ? points[hoverIndex] : null;
-  const displayVal = activePoint ? formatValue(activePoint.value) : currentValue;
-  const displayDate = activePoint ? activePoint.date : sublabel;
+  let displayVal = currentValue;
+  let displayDate = sublabel;
+
+  if (hoverIndex !== null) {
+    if (multiData && multiData.length > 0) {
+      displayDate = multiData[0]?.points[hoverIndex]?.date || sublabel;
+      displayVal = multiData
+        .map((m) => `${m.formatValue(m.points[hoverIndex]?.value ?? 0)} ${m.name}`)
+        .join(' · ');
+    } else if (activePoint) {
+      displayVal = formatValue(activePoint.value);
+      displayDate = activePoint.date;
+    }
+  }
 
   // Unique gradient id based on color
   const gradId = `grad-${color.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -161,6 +234,7 @@ function SparkCardContent({
   return (
     <div
       ref={containerRef}
+      className={className}
       onMouseMove={handleMouseMove}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = color;
@@ -183,14 +257,16 @@ function SparkCardContent({
         cursor: 'crosshair',
         transition: 'border-color 0.2s, transform 0.15s',
         minHeight: height + 85,
+        ...style,
       }}
     >
       {/* Card Header: Title + Badge */}
       <div>
         <div style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
+          gap: 6,
           marginBottom: 4,
         }}>
           <span style={{
@@ -200,10 +276,27 @@ function SparkCardContent({
             color: MONOKAI.muted,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
           }}>
             {title}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 6,
+            flexWrap: 'wrap',
+          }}>
+            {multiData && multiData.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 4 }}>
+                {multiData.map((s, idx) => (
+                  <span key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: s.color, fontWeight: 700 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
+                    {s.name}
+                  </span>
+                ))}
+              </div>
+            )}
             {badges && badges.length > 0 ? (
               badges.map((b, i) => (
                 <span
@@ -244,14 +337,16 @@ function SparkCardContent({
           display: 'flex',
           alignItems: 'baseline',
           justifyContent: 'space-between',
+          gap: 6,
           marginBottom: 8,
         }}>
           <span style={{
             fontFamily: MONOKAI.monoFont,
-            fontSize: 22,
+            fontSize: multiData && multiData.length > 0 ? 14 : 22,
             fontWeight: 800,
             color: MONOKAI.text,
             letterSpacing: '0.02em',
+            whiteSpace: 'nowrap',
           }}>
             {displayVal}
           </span>
@@ -259,8 +354,9 @@ function SparkCardContent({
             <span style={{
               fontFamily: MONOKAI.monoFont,
               fontSize: 10,
-              color: hoverIndex !== null ? color : MONOKAI.muted,
+              color: hoverIndex !== null ? (multiData && multiData.length > 0 ? MONOKAI.cyan : color) : MONOKAI.muted,
               fontWeight: 600,
+              whiteSpace: 'nowrap',
             }}>
               {displayDate}
             </span>
@@ -308,73 +404,119 @@ function SparkCardContent({
               </linearGradient>
             </defs>
 
-            {/* Dotted Zero Line for negative graphs */}
-            {hasNegative && zeroY !== null && (
-              <line
-                x1={0}
-                x2={svgWidth}
-                y1={zeroY}
-                y2={zeroY}
-                stroke={MONOKAI.muted}
-                strokeWidth={1}
-                strokeDasharray="3,3"
-                opacity={0.65}
-              />
-            )}
-
-            {/* Reference Dashed Lines (e.g. 5-year median, Industry median) */}
-            {computedRefLines.map((ref, idx) => (
-              <line
-                key={idx}
-                x1={0}
-                x2={svgWidth}
-                y1={ref.y}
-                y2={ref.y}
-                stroke={ref.color || MONOKAI.orange}
-                strokeWidth={1}
-                strokeDasharray={ref.dash || '4,4'}
-                opacity={0.75}
-              />
-            ))}
-
-            {/* Area Fill */}
-            {areaData && (
-              <path d={areaData} fill={`url(#${gradId})`} />
-            )}
-
-            {/* Minimalist Line */}
-            {pathData && (
-              <path
-                d={pathData}
-                fill="none"
-                stroke={color}
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            )}
-
-            {/* Active Scrub Marker & Vertical Line */}
-            {activePoint && (
+            {multiData && multiData.length > 0 ? (
               <>
-                <line
-                  x1={activePoint.x}
-                  x2={activePoint.x}
-                  y1={0}
-                  y2={height}
-                  stroke={color}
-                  strokeWidth={1}
-                  strokeDasharray="2,2"
-                  opacity={0.7}
-                />
-                <circle
-                  cx={activePoint.x}
-                  cy={activePoint.y}
-                  r={4}
-                  fill={color}
-                  stroke={MONOKAI.bgDark}
-                  strokeWidth={2}
-                />
+                {multiData.map((s, idx) => (
+                  <g key={idx}>
+                    {s.areaData && (
+                      <path d={s.areaData} fill={s.color} fillOpacity={0.07} />
+                    )}
+                    {s.pathData && (
+                      <path
+                        d={s.pathData}
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                    {hoverIndex !== null && s.points[hoverIndex] && (
+                      <circle
+                        cx={s.points[hoverIndex].x}
+                        cy={s.points[hoverIndex].y}
+                        r={4}
+                        fill={s.color}
+                        stroke={MONOKAI.bgDark}
+                        strokeWidth={2}
+                      />
+                    )}
+                  </g>
+                ))}
+                {hoverIndex !== null && multiData[0]?.points[hoverIndex] && (
+                  <line
+                    x1={multiData[0].points[hoverIndex].x}
+                    x2={multiData[0].points[hoverIndex].x}
+                    y1={0}
+                    y2={height}
+                    stroke={MONOKAI.textDim}
+                    strokeWidth={1}
+                    strokeDasharray="2,2"
+                    opacity={0.6}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {/* Dotted Zero Line for negative graphs */}
+                {hasNegative && zeroY !== null && (
+                  <line
+                    x1={0}
+                    x2={svgWidth}
+                    y1={zeroY}
+                    y2={zeroY}
+                    stroke={MONOKAI.muted}
+                    strokeWidth={1}
+                    strokeDasharray="3,3"
+                    opacity={0.65}
+                  />
+                )}
+
+                {/* Reference Dashed Lines (e.g. 5-year median, Industry median) */}
+                {computedRefLines.map((ref, idx) => (
+                  <line
+                    key={idx}
+                    x1={0}
+                    x2={svgWidth}
+                    y1={ref.y}
+                    y2={ref.y}
+                    stroke={ref.color || MONOKAI.orange}
+                    strokeWidth={1}
+                    strokeDasharray={ref.dash || '4,4'}
+                    opacity={0.75}
+                  />
+                ))}
+
+                {/* Area Fill */}
+                {areaData && (
+                  <path d={areaData} fill={`url(#${gradId})`} />
+                )}
+
+                {/* Minimalist Line */}
+                {pathData && (
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Active Scrub Marker & Vertical Line */}
+                {activePoint && (
+                  <>
+                    <line
+                      x1={activePoint.x}
+                      x2={activePoint.x}
+                      y1={0}
+                      y2={height}
+                      stroke={color}
+                      strokeWidth={1}
+                      strokeDasharray="2,2"
+                      opacity={0.7}
+                    />
+                    <circle
+                      cx={activePoint.x}
+                      cy={activePoint.y}
+                      r={4}
+                      fill={color}
+                      stroke={MONOKAI.bgDark}
+                      strokeWidth={2}
+                    />
+                  </>
+                )}
               </>
             )}
           </svg>
@@ -400,6 +542,7 @@ export default function SparkCard(props) {
       fallbackTitle={props.title || 'CHART'}
       height={props.height || 90}
       card={true}
+      className={props.className}
     >
       <SparkCardContent {...props} />
     </MonokaiErrorBoundary>

@@ -109,7 +109,7 @@ class FinancialDataProvider:
     def get_financial_statements(
         self, ticker: str, period: str = "quarterly"
     ) -> List[FinancialStatement]:
-        cached_stmt = self.cache.get_financial_statements(ticker, "av_quarterly_v4")
+        cached_stmt = self.cache.get_financial_statements(ticker, "av_quarterly_v5")
         if cached_stmt:
             print(f"  ⚡ [CACHE HIT] Financial Statements ({ticker.upper()}, {period})")
             return [FinancialStatement(**s) for s in cached_stmt]
@@ -150,14 +150,20 @@ class FinancialDataProvider:
                 gross_val = safe_float(inc.get("grossProfit"))
                 net_val = safe_float(inc.get("netIncome"))
                 op_inc_val = safe_float(inc.get("operatingIncome"))
+                ebitda_val = safe_float(inc.get("ebitda"))
 
                 cf_item = cf_map.get(date_str, {})
                 opcf_val = safe_float(cf_item.get("operatingCashflow"))
                 capex_val = safe_float(cf_item.get("capitalExpenditures"))
+                sbc_val = safe_float(cf_item.get("stockBasedCompensation"))
 
                 fcf_val = None
                 if opcf_val is not None and capex_val is not None:
                     fcf_val = RatioEngine.calculate_free_cash_flow(opcf_val, capex_val)
+
+                real_fcf_val = None
+                if fcf_val is not None:
+                    real_fcf_val = fcf_val - (sbc_val or 0.0)
 
                 stmt = FinancialStatement(
                     period_end_date=str(date_str),
@@ -169,6 +175,9 @@ class FinancialDataProvider:
                     capital_expenditure=capex_val,
                     free_cash_flow=fcf_val,
                     operating_income=op_inc_val,
+                    stock_based_compensation=sbc_val,
+                    real_fcf=real_fcf_val,
+                    ebitda=ebitda_val,
                 )
                 statements.append(stmt)
 
@@ -181,7 +190,7 @@ class FinancialDataProvider:
 
             if len(statements) > 0:
                 self.cache.save_financial_statements(
-                    ticker, "av_quarterly_v4", [s.model_dump() for s in statements]
+                    ticker, "av_quarterly_v5", [s.model_dump() for s in statements]
                 )
                 print(f"  💾 [CACHE SAVED] Financial Statements ({ticker.upper()}, {len(statements)} quarters)")
                 return statements

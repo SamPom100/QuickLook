@@ -31,6 +31,10 @@ class FinancialStatement(BaseModel):
     total_assets: Optional[float] = None
     total_liabilities: Optional[float] = None
     shares_outstanding: Optional[float] = None
+    stock_based_compensation: Optional[float] = None
+    real_fcf: Optional[float] = None
+    invested_capital: Optional[float] = None
+    ebitda: Optional[float] = None
 
 
 class ValuationMetrics(BaseModel):

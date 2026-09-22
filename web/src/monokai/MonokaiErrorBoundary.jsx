@@ -30,7 +30,7 @@ export default class MonokaiErrorBoundary extends React.Component {
 
       if (isCard) {
         return (
-          <div style={{
+          <div className={this.props.className} style={{
             background: MONOKAI.bgDark,
             border: `1px dashed ${MONOKAI.pink}`,
             borderRadius: 8,

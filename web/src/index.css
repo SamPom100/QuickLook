@@ -10,3 +10,82 @@ body {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Row 1 Responsive Grid: 2fr (Stock) + 1fr (PE) + 1fr (Share Count) + 1fr (Rev Growth) */
+.row1-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .row1-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .row1-stock-card {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1120px) {
+  .row1-grid {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+  .row1-stock-card {
+    grid-column: span 1;
+  }
+}
+
+/* 4-Column Balanced Grid */
+.grid-4-col {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .grid-4-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1080px) {
+  .grid-4-col {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* 3-Column Balanced Grid */
+.grid-3-col {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .grid-3-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1080px) {
+  .grid-3-col {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.hero-stock-card {
+  grid-column: span 1;
+}
+
+@media (min-width: 640px) {
+  .hero-stock-card {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1080px) {
+  .hero-stock-card {
+    grid-column: span 3;
+  }
+}
