@@ -147,11 +147,21 @@ class AlphaVantageProvider(BaseDataProvider):
             if len(statements) > 40:
                 statements = statements[-40:]
 
+            # Guard against caching incomplete data: if the income statement fetch
+            # succeeded but the cash flow fetch came back empty (e.g. rate-limited),
+            # every statement's cash-flow fields will be None. Persisting that
+            # permanently would silently break FCF-based charts for 24h+. Only
+            # cache once cash flow data actually populated at least one quarter.
+            has_cash_flow_data = any(s.operating_cash_flow is not None for s in statements)
+
             if len(statements) > 0:
-                self.cache.save_financial_statements(
-                    ticker, "av_quarterly_v5", [s.model_dump() for s in statements]
-                )
-                print(f"  💾 [CACHE SAVED] Financial Statements ({ticker.upper()}, {len(statements)} quarters)")
+                if has_cash_flow_data or not cf_reports:
+                    self.cache.save_financial_statements(
+                        ticker, "av_quarterly_v5", [s.model_dump() for s in statements]
+                    )
+                    print(f"  💾 [CACHE SAVED] Financial Statements ({ticker.upper()}, {len(statements)} quarters)")
+                else:
+                    print(f"  ⚠️ [SKIP CACHE] Financial Statements ({ticker.upper()}) - cash flow data incomplete, will retry next request")
                 return statements
 
         except Exception as e:

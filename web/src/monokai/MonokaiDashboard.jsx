@@ -508,12 +508,16 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             height={115}
             sublabel={latestQ.date}
             referenceLines={peRefLines}
+            emptyMessage={(latestQ.netIncome != null && latestQ.netIncome < 0) ? '// N/A — NEGATIVE EARNINGS' : '// NO HISTORICAL DATA'}
             footerSlot={peers && peers.length > 0 ? (
-              <div style={{
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -523,6 +527,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
                   Peers:
                 </span>
@@ -551,6 +557,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
                         transition: 'all 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
@@ -630,11 +638,14 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   </div>
                 )}
                 {peers && peers.length > 0 && (
-                  <div style={{
+                  <div className="peer-scroll-row" style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 5,
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
                   }}>
                     <span style={{
                       fontFamily: MONOKAI.monoFont,
@@ -644,8 +655,10 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
                       marginRight: 2,
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
                     }}>
-                      Peers 5Y Avg:
+                      Peers:
                     </span>
                     {peers.slice(0, 5).map((p) => {
                       const sym = typeof p === 'string' ? p : p.ticker;
@@ -674,6 +687,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 3,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
                             transition: 'all 0.15s ease',
                           }}
                           onMouseEnter={(e) => {
@@ -708,11 +723,15 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
             height={95}
             sublabel={latestQ.date}
-            footerSlot={kpis.ttmGrossMargin != null ? (
-              <div style={{
+            footerSlot={peers && peers.length > 0 ? (
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: 5,
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -721,17 +740,55 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   color: MONOKAI.muted,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
+                  marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
-                  TTM Margin:
+                  Peers:
                 </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.green,
-                }}>
-                  {kpis.ttmGrossMargin.toFixed(1)}%
-                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const gmVal = typeof p === 'object' && p.grossMarginPct ? parseFloat(p.grossMarginPct) : null;
+                  const gm = gmVal != null && !isNaN(gmVal) ? `${gmVal.toFixed(1)}%` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.green;
+                        e.currentTarget.style.color = MONOKAI.green;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.green }}>{gm}</span>
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
           />
@@ -746,32 +803,6 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
             height={95}
             sublabel={latestQ.date}
-            footerSlot={
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: MONOKAI.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}>
-                  OpEx % of Rev:
-                </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.pink,
-                }}>
-                  {opexPctOfRev ? `${opexPctOfRev}%` : '—'}
-                </span>
-              </div>
-            }
           />
 
           <SparkCard
@@ -784,11 +815,15 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `$${v.toFixed(2)}${unitSuffix}`}
             height={95}
             sublabel={latestQ.date}
-            footerSlot={kpis.ttmNetMargin != null ? (
-              <div style={{
+            footerSlot={peers && peers.length > 0 ? (
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: 5,
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -797,17 +832,55 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   color: MONOKAI.muted,
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
+                  marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
-                  TTM Margin:
+                  Peers:
                 </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.green,
-                }}>
-                  {kpis.ttmNetMargin.toFixed(1)}%
-                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const nmVal = typeof p === 'object' && p.netMarginPct ? parseFloat(p.netMarginPct) : null;
+                  const nm = nmVal != null && !isNaN(nmVal) ? `${nmVal.toFixed(1)}%` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.green;
+                        e.currentTarget.style.color = MONOKAI.green;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.green }}>{nm}</span>
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
           />
@@ -905,49 +978,17 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
           {/* 3. Cash vs. Debt (Dual Line Graph) */}
           <SparkCard
             title="Cash vs. Debt"
-            currentValue={`$${(kpis.totalCash || 0).toFixed(1)}${unitSuffix} Cash · $${(kpis.totalDebt || 0).toFixed(1)}${unitSuffix} Debt`}
-            badges={kpis.isNetCash
-              ? [{ text: `+$${Math.abs(kpis.netDebt || 0).toFixed(1)}${unitSuffix} Net Cash`, color: MONOKAI.green }]
-              : [{ text: `$${(kpis.netDebt || 0).toFixed(1)}${unitSuffix} Net Debt`, color: MONOKAI.pink }]}
+            currentValue={`$${(latestQ.cash != null ? latestQ.cash : (kpis.totalCash || 0)).toFixed(1)}${unitSuffix} Cash · $${(latestQ.debt != null ? latestQ.debt : (kpis.totalDebt || 0)).toFixed(1)}${unitSuffix} Debt`}
+            badges={(latestQ.netDebt != null ? latestQ.netDebt : (kpis.netDebt || 0)) < 0
+              ? [{ text: `+$${Math.abs(latestQ.netDebt != null ? latestQ.netDebt : (kpis.netDebt || 0)).toFixed(1)}${unitSuffix} Net Cash`, color: MONOKAI.green }]
+              : [{ text: `$${(latestQ.netDebt != null ? latestQ.netDebt : (kpis.netDebt || 0)).toFixed(1)}${unitSuffix} Net Debt`, color: MONOKAI.pink }]}
             multiSeries={[
               { name: 'Cash', data: cashSeries, color: MONOKAI.green, formatValue: (v) => `$${v.toFixed(1)}${unitSuffix}` },
               { name: 'Debt', data: debtSeries, color: MONOKAI.pink, formatValue: (v) => `$${v.toFixed(1)}${unitSuffix}` },
             ]}
-            color={kpis.isNetCash ? MONOKAI.green : MONOKAI.yellow}
+            color={(latestQ.netDebt != null ? latestQ.netDebt : (kpis.netDebt || 0)) < 0 ? MONOKAI.green : MONOKAI.yellow}
             height={95}
             sublabel={latestQ.date || 'Latest'}
-            footerSlot={
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.green,
-                }}>
-                  Cash: ${kpis.totalCash != null ? kpis.totalCash.toFixed(1) : '—'}{unitSuffix}
-                </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: kpis.isNetCash ? MONOKAI.green : MONOKAI.pink,
-                }}>
-                  {kpis.netDebtLabel || (kpis.isNetCash ? 'Net Cash' : 'Leveraged')}
-                </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.pink,
-                }}>
-                  Debt: ${kpis.totalDebt != null ? kpis.totalDebt.toFixed(1) : '—'}{unitSuffix}
-                </span>
-              </div>
-            }
           />
 
           {/* 4. FCF Conversion % */}
@@ -961,6 +1002,7 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `${v.toFixed(1)}%`}
             height={95}
             sublabel={latestQ.date}
+            emptyMessage={(latestQ.netIncome != null && latestQ.netIncome < 0) ? '// N/A — NEGATIVE EARNINGS' : '// NO HISTORICAL DATA'}
           />
         </div>
       </div>
@@ -985,6 +1027,74 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `${v.toFixed(1)}%`}
             height={95}
             sublabel={latestQ.date}
+            footerSlot={peers && peers.length > 0 ? (
+              <div className="peer-scroll-row" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              }}>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: MONOKAI.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}>
+                  Peers:
+                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const omVal = typeof p === 'object' && p.operatingMarginPct ? parseFloat(p.operatingMarginPct) : null;
+                  const om = omVal != null && !isNaN(omVal) ? `${omVal.toFixed(1)}%` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.cyan;
+                        e.currentTarget.style.color = MONOKAI.cyan;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.cyan }}>{om}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           />
 
           <SparkCard
@@ -997,6 +1107,74 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `${v.toFixed(1)}%`}
             height={95}
             sublabel={latestQ.date}
+            footerSlot={peers && peers.length > 0 ? (
+              <div className="peer-scroll-row" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              }}>
+                <span style={{
+                  fontFamily: MONOKAI.monoFont,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: MONOKAI.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}>
+                  Peers:
+                </span>
+                {peers.slice(0, 5).map((p) => {
+                  const sym = typeof p === 'string' ? p : p.ticker;
+                  const nmVal = typeof p === 'object' && p.netMarginPct ? parseFloat(p.netMarginPct) : null;
+                  const nm = nmVal != null && !isNaN(nmVal) ? `${nmVal.toFixed(1)}%` : '—';
+                  return (
+                    <button
+                      key={sym}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectTicker) onSelectTicker(sym);
+                      }}
+                      title={`Switch to ${sym}`}
+                      style={{
+                        fontFamily: MONOKAI.monoFont,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: MONOKAI.textDim,
+                        background: MONOKAI.bgSurface,
+                        border: `1px solid ${MONOKAI.borderSubtle}`,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.green;
+                        e.currentTarget.style.color = MONOKAI.green;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                        e.currentTarget.style.color = MONOKAI.textDim;
+                      }}
+                    >
+                      <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: MONOKAI.green }}>{nm}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           />
 
           <SparkCard
@@ -1023,29 +1201,99 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             sublabel={latestQ.date}
             referenceLines={[{ value: 15, color: MONOKAI.green, dash: '4,4' }]}
             footerSlot={
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: MONOKAI.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                 }}>
-                  5Y Average:
-                </span>
-                <span style={{
-                  fontFamily: MONOKAI.monoFont,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: MONOKAI.cyan,
-                }}>
-                  {kpis.avgROIC5Y ? `${kpis.avgROIC5Y.toFixed(1)}%` : '—'}
-                </span>
+                  <span style={{
+                    fontFamily: MONOKAI.monoFont,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: MONOKAI.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    5Y Average:
+                  </span>
+                  <span style={{
+                    fontFamily: MONOKAI.monoFont,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: MONOKAI.cyan,
+                  }}>
+                    {kpis.avgROIC5Y ? `${kpis.avgROIC5Y.toFixed(1)}%` : '—'}
+                  </span>
+                </div>
+                {peers && peers.length > 0 && (
+                  <div className="peer-scroll-row" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    flexWrap: 'nowrap',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}>
+                    <span style={{
+                      fontFamily: MONOKAI.monoFont,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: MONOKAI.muted,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      marginRight: 2,
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                    }}>
+                      Peers ROA*:
+                    </span>
+                    {peers.slice(0, 5).map((p) => {
+                      const sym = typeof p === 'string' ? p : p.ticker;
+                      const roicVal = typeof p === 'object' && p.roicProxyPct ? parseFloat(p.roicProxyPct) : null;
+                      const roic = roicVal != null && !isNaN(roicVal) ? `${roicVal.toFixed(1)}%` : '—';
+                      return (
+                        <button
+                          key={sym}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectTicker) onSelectTicker(sym);
+                          }}
+                          title={`Switch to ${sym} (Return on Assets, proxy for ROIC)`}
+                          style={{
+                            fontFamily: MONOKAI.monoFont,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: MONOKAI.textDim,
+                            background: MONOKAI.bgSurface,
+                            border: `1px solid ${MONOKAI.borderSubtle}`,
+                            borderRadius: 4,
+                            padding: '2px 5px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = MONOKAI.cyan;
+                            e.currentTarget.style.color = MONOKAI.cyan;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = MONOKAI.borderSubtle;
+                            e.currentTarget.style.color = MONOKAI.textDim;
+                          }}
+                        >
+                          <span style={{ color: MONOKAI.text, fontWeight: 700 }}>{sym}</span>
+                          <span style={{ color: MONOKAI.cyan }}>{roic}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             }
           />
@@ -1071,12 +1319,16 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             formatValue={(v) => `${v.toFixed(1)}x`}
             height={95}
             sublabel={latestQ.date}
+            emptyMessage={(latestQ.operatingIncome != null && latestQ.operatingIncome < 0) ? '// N/A — NEGATIVE OPERATING INCOME' : '// NO HISTORICAL DATA'}
             footerSlot={peers && peers.length > 0 ? (
-              <div style={{
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -1086,6 +1338,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
                   Peers:
                 </span>
@@ -1114,6 +1368,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
                         transition: 'all 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
@@ -1145,11 +1401,14 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             sublabel={latestQ.date}
             referenceLines={psRefLines}
             footerSlot={peers && peers.length > 0 ? (
-              <div style={{
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -1159,6 +1418,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
                   Peers:
                 </span>
@@ -1187,6 +1448,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
                         transition: 'all 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
@@ -1218,11 +1481,14 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
             sublabel={latestQ.date}
             referenceLines={pbRefLines}
             footerSlot={peers && peers.length > 0 ? (
-              <div style={{
+              <div className="peer-scroll-row" style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
               }}>
                 <span style={{
                   fontFamily: MONOKAI.monoFont,
@@ -1232,6 +1498,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   marginRight: 2,
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                 }}>
                   Peers:
                 </span>
@@ -1260,6 +1528,8 @@ export default function MonokaiDashboard({ data, onSelectTicker }) {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 3,
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
                         transition: 'all 0.15s ease',
                       }}
                       onMouseEnter={(e) => {

@@ -92,16 +92,24 @@ def fetch_single_peer(p_sym: str) -> dict:
         p_rev_growth = "N/A"
         p_rev_growth_5y = "N/A"
         p_pb = "N/A"
-        peer_cache_key = f'https://peer-info-v8/{p_sym_upper}'
+        p_gross_margin = "N/A"
+        p_net_margin = "N/A"
+        p_operating_margin = "N/A"
+        p_roic_proxy = "N/A"
+        peer_cache_key = f'https://peer-info-v10/{p_sym_upper}'
         cached = cm.get_url_cache(peer_cache_key)
         
-        if cached and isinstance(cached, dict) and "revGrowth5Y" in cached and "pbRatio" in cached:
+        if cached and isinstance(cached, dict) and "revGrowth5Y" in cached and "pbRatio" in cached and "grossMarginPct" in cached and "operatingMarginPct" in cached:
             p_pe = cached.get("peRatio", "N/A")
             p_ps = cached.get("psRatio", "N/A")
             p_ev = cached.get("evEbitda", "N/A")
             p_rev_growth = cached.get("revenueGrowth", "N/A")
             p_rev_growth_5y = cached.get("revGrowth5Y", "N/A")
             p_pb = cached.get("pbRatio", "N/A")
+            p_gross_margin = cached.get("grossMarginPct", "N/A")
+            p_net_margin = cached.get("netMarginPct", "N/A")
+            p_operating_margin = cached.get("operatingMarginPct", "N/A")
+            p_roic_proxy = cached.get("roicProxyPct", "N/A")
         else:
             # Query Yahoo Finance directly with 0 rate limits
             try:
@@ -112,6 +120,10 @@ def fetch_single_peer(p_sym: str) -> dict:
                 ev_val = yf_info.get("enterpriseToEbitda")
                 rg_val = yf_info.get("revenueGrowth")
                 pb_val = yf_info.get("priceToBook")
+                gm_val = yf_info.get("grossMargins")
+                nm_val = yf_info.get("profitMargins")
+                om_val = yf_info.get("operatingMargins")
+                roa_val = yf_info.get("returnOnAssets")
                 if pe_val and pe_val != "None":
                     p_pe = round(float(pe_val), 2)
                 if ps_val and ps_val != "None":
@@ -122,6 +134,14 @@ def fetch_single_peer(p_sym: str) -> dict:
                     p_rev_growth = round(float(rg_val) * 100.0, 1)
                 if pb_val and pb_val != "None":
                     p_pb = round(float(pb_val), 2)
+                if gm_val and gm_val != "None":
+                    p_gross_margin = round(float(gm_val) * 100.0, 1)
+                if nm_val and nm_val != "None":
+                    p_net_margin = round(float(nm_val) * 100.0, 1)
+                if om_val and om_val != "None":
+                    p_operating_margin = round(float(om_val) * 100.0, 1)
+                if roa_val and roa_val != "None":
+                    p_roic_proxy = round(float(roa_val) * 100.0, 1)
 
                 # Compute 5-Year Revenue Growth for peer
                 try:
@@ -147,6 +167,10 @@ def fetch_single_peer(p_sym: str) -> dict:
                     "revenueGrowth": p_rev_growth,
                     "revGrowth5Y": p_rev_growth_5y,
                     "pbRatio": p_pb,
+                    "grossMarginPct": p_gross_margin,
+                    "netMarginPct": p_net_margin,
+                    "operatingMarginPct": p_operating_margin,
+                    "roicProxyPct": p_roic_proxy,
                 })
             except Exception:
                 cm.save_url_cache(peer_cache_key, {
@@ -156,6 +180,10 @@ def fetch_single_peer(p_sym: str) -> dict:
                     "revenueGrowth": "N/A",
                     "revGrowth5Y": "N/A",
                     "pbRatio": "N/A",
+                    "grossMarginPct": "N/A",
+                    "netMarginPct": "N/A",
+                    "operatingMarginPct": "N/A",
+                    "roicProxyPct": "N/A",
                 })
 
         return {
@@ -167,6 +195,10 @@ def fetch_single_peer(p_sym: str) -> dict:
             "revenueGrowth": p_rev_growth,
             "revGrowth5Y": p_rev_growth_5y,
             "pbRatio": p_pb,
+            "grossMarginPct": p_gross_margin,
+            "netMarginPct": p_net_margin,
+            "operatingMarginPct": p_operating_margin,
+            "roicProxyPct": p_roic_proxy,
         }
     except Exception:
         return {
@@ -177,6 +209,10 @@ def fetch_single_peer(p_sym: str) -> dict:
             "evEbitda": "N/A",
             "revenueGrowth": "N/A",
             "pbRatio": "N/A",
+            "grossMarginPct": "N/A",
+            "netMarginPct": "N/A",
+            "operatingMarginPct": "N/A",
+            "roicProxyPct": "N/A",
         }
 
 def get_peer_comparison(ticker: str) -> list:
@@ -488,7 +524,9 @@ def get_data(ticker):
     net_debt = total_debt - total_cash
     is_net_cash = net_debt < 0
     ev_ebitda_val = yf_info.get("enterpriseToEbitda")
-    ev_ebitda = round(float(ev_ebitda_val), 1) if (ev_ebitda_val and ev_ebitda_val != "None") else None
+    ev_ebitda_raw = round(float(ev_ebitda_val), 1) if (ev_ebitda_val and ev_ebitda_val != "None") else None
+    # Guard against absurd ratios when EBITDA is near-zero or negative (e.g. unprofitable companies)
+    ev_ebitda = ev_ebitda_raw if (ev_ebitda_raw is not None and 0 < ev_ebitda_raw < 150) else None
 
     if is_net_cash:
         net_cash_abs = abs(net_debt)

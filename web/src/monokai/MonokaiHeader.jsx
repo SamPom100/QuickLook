@@ -107,7 +107,7 @@ export default function MonokaiHeader({
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
           }}>
-            Terminal v4
+            Terminal v5
           </span>
         </div>
 

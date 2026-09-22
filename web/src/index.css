@@ -74,6 +74,11 @@ body {
   }
 }
 
+/* Hide scrollbar for horizontally-scrolling peer comparison rows */
+.peer-scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
 .hero-stock-card {
   grid-column: span 1;
 }

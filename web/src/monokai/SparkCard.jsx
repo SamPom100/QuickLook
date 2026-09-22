@@ -19,6 +19,7 @@ function SparkCardContent({
   referenceValue = null,
   referenceColor = MONOKAI.orange,
   referenceLines = [],
+  emptyMessage = '// NO HISTORICAL DATA',
   className = '',
   style = {},
 }) {
@@ -389,12 +390,11 @@ function SparkCardContent({
               color: MONOKAI.muted,
               letterSpacing: '0.04em',
             }}>
-              // NO HISTORICAL DATA
+              {emptyMessage}
             </span>
           </div>
         ) : (
-          <svg
-            viewBox={`0 0 ${svgWidth} ${height}`}
+          <svg            viewBox={`0 0 ${svgWidth} ${height}`}
             style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
           >
             <defs>
