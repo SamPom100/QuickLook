@@ -42,11 +42,15 @@ echo "🚀 Starting QuickLook Finance Dashboard..."
 lsof -ti:5001,5173 | xargs kill -9 2>/dev/null || true
 sleep 1
 
-# Check for virtualenv if present
-if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-elif [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
+# Use a local virtualenv, creating one if needed (system Python may be externally managed)
+if [ -f "venv/bin/activate" ] && [ ! -f ".venv/bin/activate" ]; then
+    . venv/bin/activate
+else
+    if [ ! -f ".venv/bin/activate" ]; then
+        echo "  🐍 Creating Python virtualenv in .venv..."
+        python3 -m venv .venv || { echo "❌ Error: failed to create .venv"; exit 1; }
+    fi
+    . .venv/bin/activate
 fi
 
 # Check Python command
