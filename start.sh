@@ -95,14 +95,23 @@ export PYTHONUNBUFFERED=1
 $PYTHON_CMD -u api.py &
 BACKEND_PID=$!
 
-sleep 1.2
-
-# Check if Backend is still alive
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "❌ Backend API failed to start. Check api.py errors above."
-    cleanup
-    exit 1
-fi
+# Wait until Flask is actually accepting connections (up to 15 s)
+WAIT_TICKS=0
+until curl -s http://localhost:5001/api/health >/dev/null 2>&1; do
+    sleep 0.5
+    WAIT_TICKS=$((WAIT_TICKS + 1))
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo "❌ Backend API failed to start. Check api.py errors above."
+        cleanup
+        exit 1
+    fi
+    if [ $WAIT_TICKS -ge 30 ]; then
+        echo "❌ Backend API did not become ready within 15 s."
+        cleanup
+        exit 1
+    fi
+done
+echo "  ✅ Backend API is ready."
 
 # 2. Start Vite React frontend on port 5173
 echo "  ⚡ Launching Frontend App (Vite/React)..."

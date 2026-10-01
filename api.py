@@ -20,6 +20,35 @@ sys.stdout.reconfigure(line_buffering=True)
 app = Flask(__name__)
 CORS(app)
 
+# ---------------------------------------------------------------------------
+# NaN / Infinity → null sanitizer
+# Python's json module (and Flask's jsonify) happily emits NaN / Infinity,
+# but those are NOT valid JSON — browsers' JSON.parse() throws and the
+# frontend receives an empty {} which kills every chart with "NO HISTORICAL DATA".
+# ---------------------------------------------------------------------------
+import math as _math
+
+def _sanitize(obj):
+    """Recursively replace float NaN/Inf with None so the JSON is always valid."""
+    if isinstance(obj, float):
+        return None if (_math.isnan(obj) or _math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+_original_jsonify = jsonify
+
+def jsonify(*args, **kwargs):  # shadow Flask's jsonify with a sanitizing wrapper
+    if args and not kwargs:
+        data = args[0]
+    elif kwargs and not args:
+        data = kwargs
+    else:
+        data = args[0] if args else kwargs
+    return _original_jsonify(_sanitize(data))
+
 service = FinancialDataService()
 cm = CacheManager()
 
@@ -308,6 +337,11 @@ def get_industry_benchmarks(ticker: str, cache_manager=None) -> dict:
         return {"pe": None, "ps": None, "industry": None}
 
 
+@app.route("/api/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/data/<ticker>")
 def get_data(ticker):
     ticker = ticker.strip().upper()
@@ -510,12 +544,22 @@ def get_data(ticker):
                     "y": round(float(p), 2),
                     "date": d.strftime("%Y-%m-%d"),
                 })
-        if len(prices) > 0:
-            latest_price = float(prices[-1])
+        # Use the last valid (non-NaN) close — today's partial candle can be NaN
+        valid_prices = [p for p in prices if p is not None and not (isinstance(p, float) and (_math.isnan(p) or _math.isinf(p)))]
+        if valid_prices:
+            latest_price = float(valid_prices[-1])
 
     # Instantiate Ticker once for all advanced valuation & capital efficiency metrics
     yf_t = yf.Ticker(ticker)
     yf_info = yf_t.info or {}
+
+    # If historical close was NaN (market open / partial candle), use live quote fields
+    if latest_price == 0.0:
+        for field in ("currentPrice", "regularMarketPrice", "navPrice", "ask", "bid"):
+            raw = yf_info.get(field)
+            if raw and isinstance(raw, (int, float)) and not _math.isnan(float(raw)) and float(raw) > 0:
+                latest_price = float(raw)
+                break
 
     # Solvency & Capital Structure
     total_debt = float(yf_info.get("totalDebt") or 0.0)
