@@ -1,6 +1,6 @@
 # QuickLook
 
-![QuickLook](docs/dashboard.png)
+<img width="1081" height="853" alt="quicklook" src="https://github.com/user-attachments/assets/10df5653-173f-4919-846c-3fc7c3ab4570" />
 
 ```bash
 ./start.sh
