@@ -23,7 +23,12 @@ class CacheManager:
 
     @contextmanager
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+        except Exception:
+            pass
         try:
             yield conn
         finally:
@@ -118,109 +123,127 @@ class CacheManager:
             conn.commit()
 
     def get_company_info(self, ticker: str, max_age_hours: int = 24) -> Optional[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT json_data, updated_at FROM company_info WHERE ticker = ?",
-                (ticker.upper(),),
-            )
-            row = cursor.fetchone()
-            if row:
-                json_data, updated_at = row
-                updated_dt = datetime.fromisoformat(updated_at)
-                if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
-                    return json.loads(json_data)
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT json_data, updated_at FROM company_info WHERE ticker = ?",
+                    (ticker.upper(),),
+                )
+                row = cursor.fetchone()
+                if row:
+                    json_data, updated_at = row
+                    updated_dt = datetime.fromisoformat(updated_at)
+                    if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
+                        return json.loads(json_data)
+        except Exception:
+            return None
         return None
 
     def save_company_info(self, ticker: str, data: Dict[str, Any]):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO company_info (ticker, json_data, updated_at)
-                VALUES (?, ?, ?)
-                """,
-                (ticker.upper(), json.dumps(data), datetime.now().isoformat()),
-            )
-            conn.commit()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO company_info (ticker, json_data, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (ticker.upper(), json.dumps(data), datetime.now().isoformat()),
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     def get_financial_statements(
         self, ticker: str, period_type: str, max_age_hours: int = 24
     ) -> Optional[List[Dict[str, Any]]]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT json_data, updated_at FROM financial_statements
-                WHERE ticker = ? AND period_type = ?
-                """,
-                (ticker.upper(), period_type.lower()),
-            )
-            row = cursor.fetchone()
-            if row:
-                json_data, updated_at = row
-                updated_dt = datetime.fromisoformat(updated_at)
-                if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
-                    return json.loads(json_data)
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT json_data, updated_at FROM financial_statements
+                    WHERE ticker = ? AND period_type = ?
+                    """,
+                    (ticker.upper(), period_type.lower()),
+                )
+                row = cursor.fetchone()
+                if row:
+                    json_data, updated_at = row
+                    updated_dt = datetime.fromisoformat(updated_at)
+                    if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
+                        return json.loads(json_data)
+        except Exception:
+            return None
         return None
 
     def save_financial_statements(
         self, ticker: str, period_type: str, statements: List[Dict[str, Any]]
     ):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO financial_statements (ticker, period_type, json_data, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    ticker.upper(),
-                    period_type.lower(),
-                    json.dumps(statements),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO financial_statements (ticker, period_type, json_data, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        ticker.upper(),
+                        period_type.lower(),
+                        json.dumps(statements),
+                        datetime.now().isoformat(),
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     def get_price_history(
         self, ticker: str, period: str, max_age_hours: int = 4
     ) -> Optional[pd.DataFrame]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT json_data, updated_at FROM price_history
-                WHERE ticker = ? AND period = ?
-                """,
-                (ticker.upper(), period.lower()),
-            )
-            row = cursor.fetchone()
-            if row:
-                json_data, updated_at = row
-                updated_dt = datetime.fromisoformat(updated_at)
-                if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
-                    try:
-                        return pd.read_json(io.StringIO(json_data), orient="split")
-                    except Exception:
-                        return None
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT json_data, updated_at FROM price_history
+                    WHERE ticker = ? AND period = ?
+                    """,
+                    (ticker.upper(), period.lower()),
+                )
+                row = cursor.fetchone()
+                if row:
+                    json_data, updated_at = row
+                    updated_dt = datetime.fromisoformat(updated_at)
+                    if datetime.now() - updated_dt < timedelta(hours=max_age_hours):
+                        try:
+                            return pd.read_json(io.StringIO(json_data), orient="split")
+                        except Exception:
+                            return None
+        except Exception:
+            return None
         return None
 
     def save_price_history(self, ticker: str, period: str, df: pd.DataFrame):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            df_to_save = df.copy()
-            df_to_save.index = df_to_save.index.astype(str)
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO price_history (ticker, period, json_data, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    ticker.upper(),
-                    period.lower(),
-                    df_to_save.to_json(orient="split"),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                df_to_save = df.copy()
+                df_to_save.index = df_to_save.index.astype(str)
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO price_history (ticker, period, json_data, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        ticker.upper(),
+                        period.lower(),
+                        df_to_save.to_json(orient="split"),
+                        datetime.now().isoformat(),
+                    ),
+                )
+                conn.commit()
+        except Exception:
+            pass

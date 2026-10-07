@@ -74,3 +74,36 @@ def test_api_advanced_metrics():
         assert "stockBasedCompensation" in latest_q
         assert "roic" in latest_q
 
+
+def test_valuation_history_null_safety():
+    from unittest.mock import MagicMock
+    mock_provider = MagicMock()
+    mock_provider.get_company_overview.return_value = None
+    mock_provider.get_financial_statements.return_value = []
+    mock_provider.get_price_history.return_value = pd.DataFrame(
+        {"close": [150.0, 155.0]},
+        index=pd.to_datetime(["2026-01-01", "2026-01-02"])
+    )
+
+    service = FinancialDataService(provider=mock_provider)
+    result = service.get_valuation_history("INVALID_TICKER")
+    assert isinstance(result, pd.DataFrame)
+    assert not result.empty
+    assert "close" in result.columns
+
+
+def test_cache_manager_concurrency(tmp_path):
+    import concurrent.futures
+    db_file = os.path.join(tmp_path, "concurrent_cache.db")
+    cache = CacheManager(db_path=db_file)
+
+    def write_op(i):
+        cache.save_company_info(f"TICKER_{i}", {"name": f"Company {i}", "market_cap": i * 1000})
+        return cache.get_company_info(f"TICKER_{i}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(write_op, range(20)))
+
+    assert len(results) == 20
+    assert all(r is not None for r in results)
+

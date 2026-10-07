@@ -23,36 +23,56 @@ class FinancialDataService:
         Fetch quarterly financial statements enriched with Free Cash Flow and growth metrics.
         Returns a list of dicts sorted chronologically (oldest to newest).
         """
-        raw_statements = self.provider.get_financial_statements(ticker, period)
-        analyzed = RatioEngine.compute_statement_ratios(raw_statements)
-        return analyzed
+        try:
+            raw_statements = self.provider.get_financial_statements(ticker, period)
+            if not raw_statements:
+                return []
+            analyzed = RatioEngine.compute_statement_ratios(raw_statements)
+            return analyzed
+        except Exception:
+            return []
 
     def get_valuation_history(
         self, ticker: str, period: str = "10y"
     ) -> pd.DataFrame:
         """
         Fetch price history enriched with split-safe P/E and market cap.
+        Safely returns bare price_df if overview or statements are unavailable.
         """
-        overview = self.get_company_summary(ticker)
-        statements = self.provider.get_financial_statements(ticker, "quarterly")
+        try:
+            price_df = self.provider.get_price_history(ticker, period)
+            if price_df.empty:
+                return price_df
 
-        net_inc_dict = {
-            s.period_end_date: s.net_income
-            for s in statements
-            if s.net_income is not None
-        }
-        net_inc_series = pd.Series(net_inc_dict)
+            price_df.index = pd.to_datetime(price_df.index, utc=True).tz_localize(None)
 
-        price_df = self.provider.get_price_history(ticker, period)
-        if price_df.empty:
-            return price_df
+            overview = self.get_company_summary(ticker)
+            if not overview or not overview.shares_outstanding:
+                return price_df
 
-        price_df.index = pd.to_datetime(price_df.index, utc=True).tz_localize(None)
+            statements = self.provider.get_financial_statements(ticker, "quarterly")
+            if not statements:
+                return price_df
 
-        enriched_df = RatioEngine.calculate_historical_pe_ratio(
-            price_df, net_inc_series, shares_outstanding=overview.shares_outstanding
-        )
-        return enriched_df
+            net_inc_dict = {
+                s.period_end_date: s.net_income
+                for s in statements
+                if s.net_income is not None
+            }
+            if not net_inc_dict:
+                return price_df
+
+            net_inc_series = pd.Series(net_inc_dict)
+
+            enriched_df = RatioEngine.calculate_historical_pe_ratio(
+                price_df, net_inc_series, shares_outstanding=overview.shares_outstanding
+            )
+            return enriched_df
+        except Exception:
+            try:
+                return self.provider.get_price_history(ticker, period)
+            except Exception:
+                return pd.DataFrame()
 
     def get_metric_time_series(
         self, ticker: str, metric_name: str, period: str = "quarterly"
